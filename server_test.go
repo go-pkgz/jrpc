@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-pkgz/lgr"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestServerPrimitiveTypes(t *testing.T) {
-	s := Server{API: "/v1/cmd"}
+	s := Server{API: "/v1/cmd", Logger: lgr.Default()}
 
 	type respData struct {
 		Res1 string
@@ -69,7 +70,7 @@ func TestServerPrimitiveTypes(t *testing.T) {
 }
 
 func TestServerWithObject(t *testing.T) {
-	s := Server{API: "/v1/cmd"}
+	s := Server{API: "/v1/cmd", Logger: lgr.Default()}
 
 	type respData struct {
 		Res1 string
@@ -110,7 +111,7 @@ func TestServerWithObject(t *testing.T) {
 }
 
 func TestServerMethodNotImplemented(t *testing.T) {
-	s := Server{}
+	s := Server{Logger: lgr.Default()}
 	ts := httptest.NewServer(http.HandlerFunc(s.handler))
 	defer ts.Close()
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
@@ -128,7 +129,7 @@ func TestServerMethodNotImplemented(t *testing.T) {
 }
 
 func TestServerWithAuth(t *testing.T) {
-	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd"}
+	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd", Logger: lgr.Default()}
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
 		args := []interface{}{}
@@ -166,7 +167,7 @@ func TestServerWithAuth(t *testing.T) {
 }
 
 func TestServerErrReturn(t *testing.T) {
-	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd"}
+	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd", Logger: lgr.Default()}
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
 		args := []interface{}{}
@@ -195,7 +196,7 @@ func TestServerErrReturn(t *testing.T) {
 }
 
 func TestServerGroup(t *testing.T) {
-	s := Server{API: "/v1/cmd"}
+	s := Server{API: "/v1/cmd", Logger: lgr.Default()}
 	s.Group("pre", HandlersGroup{
 		"fn1": func(id uint64, params json.RawMessage) Response {
 			return Response{}
@@ -219,7 +220,7 @@ func TestServerGroup(t *testing.T) {
 }
 
 func TestServerAddLate(t *testing.T) {
-	s := Server{API: "/v1/cmd"}
+	s := Server{API: "/v1/cmd", Logger: lgr.Default()}
 	s.Add("fn1", func(id uint64, params json.RawMessage) Response {
 		return Response{}
 	})
@@ -240,6 +241,6 @@ func TestServerAddLate(t *testing.T) {
 }
 
 func TestServerNoHandlers(t *testing.T) {
-	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd"}
+	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd", Logger: lgr.Default()}
 	assert.EqualError(t, s.Run(9091), "nothing mapped for dispatch, Add has to be called prior to Run")
 }
