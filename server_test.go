@@ -114,7 +114,7 @@ func TestServerMethodNotImplemented(t *testing.T) {
 	s := Server{Logger: lgr.Default()}
 	ts := httptest.NewServer(http.HandlerFunc(s.handler))
 	defer ts.Close()
-	s.Add("test", func(id uint64, params json.RawMessage) Response {
+	s.Add("test", func(_ uint64, params json.RawMessage) Response {
 		return Response{}
 	})
 
@@ -198,13 +198,14 @@ func TestServerErrReturn(t *testing.T) {
 func TestServerGroup(t *testing.T) {
 	s := Server{API: "/v1/cmd", Logger: lgr.Default()}
 	s.Group("pre", HandlersGroup{
-		"fn1": func(id uint64, params json.RawMessage) Response {
+		"fn1": func(uint64, json.RawMessage) Response {
 			return Response{}
 		},
-		"fn2": func(id uint64, params json.RawMessage) Response {
+		"fn2": func(uint64, json.RawMessage) Response {
 			return Response{}
 		},
 	})
+
 	go func() { _ = s.Run(9091) }()
 	defer func() { assert.NoError(t, s.Shutdown()) }()
 	time.Sleep(10 * time.Millisecond)

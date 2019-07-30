@@ -92,6 +92,7 @@ func testServer(t *testing.T, req, resp string) *httptest.Server {
 		require.NoError(t, err)
 		assert.Equal(t, req, string(body))
 		t.Logf("req: %s", string(body))
-		fmt.Fprintf(w, resp)
+		_, err = fmt.Fprint(w, resp)
+		require.NoError(t, err)
 	}))
 }

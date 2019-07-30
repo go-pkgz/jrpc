@@ -88,9 +88,10 @@ func (s *Server) EncodeResponse(id uint64, resp interface{}, e error) (Response,
 		return Response{ID: id, Result: nil, Error: e.Error()}, nil
 	}
 	raw := json.RawMessage{}
-	if err = raw.UnmarshalJSON(v); err != nil {
+	if err := raw.UnmarshalJSON(v); err != nil {
 		return Response{}, err
 	}
+
 	return Response{ID: id, Result: &raw}, nil
 }
 

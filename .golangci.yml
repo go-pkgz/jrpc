@@ -28,6 +28,7 @@ linters:
   disable-all: true
   enable:
     - megacheck
+    - golint
     - govet
     - unconvert
     - megacheck
@@ -42,6 +43,14 @@ linters:
     - typecheck
     - ineffassign
     - varcheck
+    - stylecheck
+    - gochecknoinits
+    - scopelint
+    - gocritic
+    - golint
+    - nakedret
+    - gosimple
+    - prealloc
   fast: false
 
 
@@ -49,6 +58,7 @@ run:
 #  modules-download-mode: vendor
   skip-dirs:
     - vendor
+  tests: true
 
 issues:
   exclude-rules:
@@ -57,4 +67,4 @@ issues:
         - gosec
 
 service:
-  golangci-lint-version: 1.16.x
+  golangci-lint-version: 1.17.x
