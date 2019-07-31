@@ -23,18 +23,18 @@ type Response struct {
 }
 
 // EncodeResponse convert anything (type interface{}) and incoming error (if any) to Response
-func EncodeResponse(id uint64, resp interface{}, e error) (Response, error) {
+func EncodeResponse(id uint64, resp interface{}, e error) Response {
 	v, err := json.Marshal(&resp)
 	if err != nil {
-		return Response{}, err // returns error only if failed to encode
+		return Response{Error: err.Error()}
 	}
 	if e != nil {
-		return Response{ID: id, Result: nil, Error: e.Error()}, nil // pass input error
+		return Response{ID: id, Result: nil, Error: e.Error()} // pass input error
 	}
 	raw := json.RawMessage{}
 	if err := raw.UnmarshalJSON(v); err != nil {
-		return Response{}, err
+		return Response{Error: err.Error()}
 	}
 
-	return Response{ID: id, Result: &raw}, nil
+	return Response{ID: id, Result: &raw}
 }
