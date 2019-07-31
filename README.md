@@ -91,3 +91,9 @@ if err = json.Unmarshal(*resp.Result, &message); err != nil {
  </details>
 * User should encode and decode json payloads on the application level, see provided [examples](https://github.com/go-pkgz/jrpc/tree/master/_example)
 * `jrpc.Server` doesn't support https internally (yet). If used on exposed or non-private networks, should be proxied with something providing https termination (nginx and others). 
+
+## Status
+
+The code was extracted from [remark42](https://github.com/umputun/remark) and still under development. Until v1.x released the
+ API & protocol may change.
+ 
