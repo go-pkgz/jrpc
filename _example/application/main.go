@@ -1,5 +1,7 @@
 package main
 
+// example of application calling jrpc server (plugin) providing storage functionality with ""store.save" and ""store.load"
+
 import (
 	"encoding/json"
 	"log"
@@ -23,6 +25,7 @@ func main() {
 		AuthPasswd: "password",
 	}
 
+	// save record to plugin's store
 	rec := dataRecord{time.Now(), "12345"}
 	resp, err := rpcClient.Call("store.save", rec)
 	if err != nil {
@@ -34,6 +37,7 @@ func main() {
 	}
 	log.Printf("stored %+v with id=%s", rec, recID)
 
+	// load record from plugin's store by recID
 	if resp, err = rpcClient.Call("store.load", recID); err != nil {
 		panic(err)
 	}
@@ -43,6 +47,7 @@ func main() {
 
 	log.Printf("loaded %+v from id=%s", rec, recID)
 
+	// try to load a record with invalid ID
 	if resp, err = rpcClient.Call("store.load", "something"); err != nil {
 		log.Printf("can't load for id=something, %s", err)
 	}
