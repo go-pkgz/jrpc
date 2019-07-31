@@ -20,13 +20,14 @@ import (
 
 // Server is json-rpc server with an optional basic auth
 type Server struct {
-	API        string
-	AuthUser   string
-	AuthPasswd string
-	Version    string
-	AppName    string
-	Logger     L
-	funcs      struct {
+	API        string // url path, i.e. "/command" or "/rpc" etc.
+	AuthUser   string // basic auth user name, should match Client.AuthUser, optional
+	AuthPasswd string // basic auth password, should match Client.AuthPasswd, optional
+	Version    string // server version, injected from main and used for informational headers only
+	AppName    string // plugin name, injected from main and used for informational headers only
+	Logger     L      // logger, if nil will default to NoOpLogger
+
+	funcs struct {
 		m    map[string]ServerFn
 		once sync.Once
 	}
@@ -37,11 +38,8 @@ type Server struct {
 	}
 }
 
-// Encoder is a function to encode call's result to Response
-type Encoder func(id uint64, resp interface{}, e error) (Response, error)
-
-// ServerFn handler registered for each method with Add
-// Implementations provided by consumer and define response logic.
+// ServerFn handler registered for each method with Add or Group.
+// Implementations provided by consumer and defines response logic.
 type ServerFn func(id uint64, params json.RawMessage) Response
 
 // Run http server on given port
@@ -92,7 +90,7 @@ func (s *Server) Shutdown() error {
 	return s.httpServer.Shutdown(ctx)
 }
 
-// Add method handler
+// Add method handler. Handler will be called on matching method (Request.Method)
 func (s *Server) Add(method string, fn ServerFn) {
 	s.httpServer.Lock()
 	defer s.httpServer.Unlock()
@@ -112,13 +110,14 @@ func (s *Server) Add(method string, fn ServerFn) {
 // HandlersGroup alias for map of handlers
 type HandlersGroup map[string]ServerFn
 
-// Group of handlers with common prefix
+// Group of handlers with common prefix, match on group.method
 func (s *Server) Group(prefix string, m HandlersGroup) {
 	for k, v := range m {
 		s.Add(prefix+"."+k, v)
 	}
 }
 
+// handler is http handler multiplexing calls by req.Method
 func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	req := struct {
 		ID     uint64           `json:"id"`
@@ -144,6 +143,7 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, fn(req.ID, params))
 }
 
+// basicAuth middleware. enabled only if both AuthUser and AuthPasswd defined.
 func (s *Server) basicAuth(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 

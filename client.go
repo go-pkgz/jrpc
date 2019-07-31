@@ -10,16 +10,20 @@ import (
 )
 
 // Client implements remote engine and delegates all calls to remote http server
+// if AuthUser and AuthPasswd defined will be used for basic auth in each call to server
 type Client struct {
-	API        string // URL to jrpc server with entrypoint, i.e. http://127.0.0.1:8080/command
-	Client     http.Client
-	AuthUser   string
-	AuthPasswd string
+	API        string      // URL to jrpc server with entrypoint, i.e. http://127.0.0.1:8080/command
+	Client     http.Client // http client injected by user
+	AuthUser   string      // basic auth user name, should match Server.AuthUser, optional
+	AuthPasswd string      // basic auth password, should match Server.AuthPasswd, optional
 
-	id uint64 // used with atomic
+	id uint64 // used with atomic to populate unique id to Request.ID
 }
 
-// Call remote server with given method and arguments
+// Call remote server with given method and arguments.
+// Empty args will be ignored, single arg will be marshaled as-us and multiple args marshalled as []interface{}.
+// Returns Response and error. Note: Response has it's own Error field, but that onw controlled by server.
+// Returned error represent client-level errors, like failed http call, failed marshaling and so on.
 func (r *Client) Call(method string, args ...interface{}) (*Response, error) {
 
 	var b []byte
