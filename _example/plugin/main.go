@@ -6,11 +6,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
-
-	"github.com/go-pkgz/lgr"
 
 	"github.com/go-pkgz/jrpc"
 )
@@ -31,7 +30,11 @@ type jrpcServer struct {
 
 func main() {
 
-	logger := lgr.Default()
+	// optional logger implementing a single func interface
+	// Logf(format string, args ...interface{})
+	logger := jrpc.LoggerFunc(func(format string, args ...interface{}) {
+		log.Printf(format, args...)
+	})
 
 	// create rpcServer
 	rpcServer := jrpcServer{
@@ -71,7 +74,7 @@ func (j *jrpcServer) saveHndl(id uint64, params json.RawMessage) (rr jrpc.Respon
 
 	// encode response (recID)
 	var err error
-	if rr, err = j.EncodeResponse(id, recID, nil); err != nil {
+	if rr, err = jrpc.EncodeResponse(id, recID, nil); err != nil {
 		return jrpc.Response{Error: err.Error()}
 	}
 	return rr
@@ -81,17 +84,13 @@ func (j *jrpcServer) saveHndl(id uint64, params json.RawMessage) (rr jrpc.Respon
 func (j *jrpcServer) loadHndl(id uint64, params json.RawMessage) (rr jrpc.Response) {
 
 	// unmarshal request
-	args := []interface{}{}
-	if err := json.Unmarshal(params, &args); err != nil {
+	var recID string
+	if err := json.Unmarshal(params, &recID); err != nil {
 		return jrpc.Response{Error: err.Error()}
 	}
 
-	// if params are primitive type(s) and not struct they available as []interface{}
-	recID, ok := args[0].(string)
-	if !ok {
-		return jrpc.Response{Error: "incompatible argument"}
-	}
 	var rec dataRecord
+	var ok bool
 	j.synced(func() {
 		rec, ok = j.data[recID]
 	})

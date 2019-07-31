@@ -9,14 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-pkgz/lgr"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestServerPrimitiveTypes(t *testing.T) {
-	s := Server{API: "/v1/cmd", Logger: lgr.Default()}
+	s := Server{API: "/v1/cmd", Logger: NoOpLogger}
 
 	type respData struct {
 		Res1 string
@@ -35,7 +34,7 @@ func TestServerPrimitiveTypes(t *testing.T) {
 		assert.Equal(t, 42., args[1].(float64))
 		assert.Equal(t, true, args[2].(bool))
 
-		r, err := s.EncodeResponse(id, respData{"res blah", true}, nil)
+		r, err := EncodeResponse(id, respData{"res blah", true}, nil)
 		assert.NoError(t, err)
 		return r
 	})
@@ -70,7 +69,7 @@ func TestServerPrimitiveTypes(t *testing.T) {
 }
 
 func TestServerWithObject(t *testing.T) {
-	s := Server{API: "/v1/cmd", Logger: lgr.Default()}
+	s := Server{API: "/v1/cmd", Logger: NoOpLogger}
 
 	type respData struct {
 		Res1 string
@@ -90,7 +89,7 @@ func TestServerWithObject(t *testing.T) {
 		}
 		t.Logf("%+v", arg)
 
-		r, err := s.EncodeResponse(id, respData{"res blah", true}, nil)
+		r, err := EncodeResponse(id, respData{"res blah", true}, nil)
 		assert.NoError(t, err)
 		return r
 	})
@@ -111,7 +110,7 @@ func TestServerWithObject(t *testing.T) {
 }
 
 func TestServerMethodNotImplemented(t *testing.T) {
-	s := Server{Logger: lgr.Default()}
+	s := Server{Logger: NoOpLogger}
 	ts := httptest.NewServer(http.HandlerFunc(s.handler))
 	defer ts.Close()
 	s.Add("test", func(_ uint64, params json.RawMessage) Response {
@@ -129,7 +128,7 @@ func TestServerMethodNotImplemented(t *testing.T) {
 }
 
 func TestServerWithAuth(t *testing.T) {
-	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd", Logger: lgr.Default()}
+	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd", Logger: NoOpLogger}
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
 		args := []interface{}{}
@@ -143,7 +142,7 @@ func TestServerWithAuth(t *testing.T) {
 		assert.Equal(t, 42., args[1].(float64))
 		assert.Equal(t, true, args[2].(bool))
 
-		r, err := s.EncodeResponse(id, "res blah", nil)
+		r, err := EncodeResponse(id, "res blah", nil)
 		assert.NoError(t, err)
 		return r
 	})
@@ -167,7 +166,7 @@ func TestServerWithAuth(t *testing.T) {
 }
 
 func TestServerErrReturn(t *testing.T) {
-	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd", Logger: lgr.Default()}
+	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd", Logger: NoOpLogger}
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
 		args := []interface{}{}
@@ -181,7 +180,7 @@ func TestServerErrReturn(t *testing.T) {
 		assert.Equal(t, 42., args[1].(float64))
 		assert.Equal(t, true, args[2].(bool))
 
-		r, err := s.EncodeResponse(id, "res blah", errors.New("some error"))
+		r, err := EncodeResponse(id, "res blah", errors.New("some error"))
 		assert.NoError(t, err)
 		return r
 	})
@@ -196,7 +195,7 @@ func TestServerErrReturn(t *testing.T) {
 }
 
 func TestServerGroup(t *testing.T) {
-	s := Server{API: "/v1/cmd", Logger: lgr.Default()}
+	s := Server{API: "/v1/cmd", Logger: NoOpLogger}
 	s.Group("pre", HandlersGroup{
 		"fn1": func(uint64, json.RawMessage) Response {
 			return Response{}
@@ -221,7 +220,7 @@ func TestServerGroup(t *testing.T) {
 }
 
 func TestServerAddLate(t *testing.T) {
-	s := Server{API: "/v1/cmd", Logger: lgr.Default()}
+	s := Server{API: "/v1/cmd", Logger: NoOpLogger}
 	s.Add("fn1", func(id uint64, params json.RawMessage) Response {
 		return Response{}
 	})
@@ -242,6 +241,6 @@ func TestServerAddLate(t *testing.T) {
 }
 
 func TestServerNoHandlers(t *testing.T) {
-	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd", Logger: lgr.Default()}
+	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd"}
 	assert.EqualError(t, s.Run(9091), "nothing mapped for dispatch, Add has to be called prior to Run")
 }

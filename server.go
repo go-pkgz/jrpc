@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
-	log "github.com/go-pkgz/lgr"
 	"github.com/go-pkgz/rest"
 	"github.com/go-pkgz/rest/logger"
 	"github.com/pkg/errors"
@@ -47,15 +46,18 @@ type ServerFn func(id uint64, params json.RawMessage) Response
 
 // Run http server on given port
 func (s *Server) Run(port int) error {
+	if s.Logger == nil {
+		s.Logger = NoOpLogger
+	}
 	if s.AuthUser == "" || s.AuthPasswd == "" {
-		log.Print("[WARN] extension server runs without auth")
+		s.Logger.Logf("[WARN] extension server runs without auth")
 	}
 	if s.funcs.m == nil && len(s.funcs.m) == 0 {
 		return errors.Errorf("nothing mapped for dispatch, Add has to be called prior to Run")
 	}
 
 	router := chi.NewRouter()
-	router.Use(middleware.Throttle(1000), middleware.RealIP, rest.Recoverer(log.Default()))
+	router.Use(middleware.Throttle(1000), middleware.RealIP, rest.Recoverer(s.Logger))
 	router.Use(rest.AppInfo(s.AppName, "umputun", s.Version), rest.Ping)
 	logInfoWithBody := logger.New(logger.Log(s.Logger), logger.WithBody, logger.Prefix("[INFO]")).Handler
 	router.Use(middleware.Timeout(5 * time.Second))
@@ -74,25 +76,8 @@ func (s *Server) Run(port int) error {
 	}
 	s.httpServer.Unlock()
 
-	log.Printf("[INFO] listen on %d", port)
+	s.Logger.Logf("[INFO] listen on %d", port)
 	return s.httpServer.ListenAndServe()
-}
-
-// EncodeResponse convert anything to Response
-func (s *Server) EncodeResponse(id uint64, resp interface{}, e error) (Response, error) {
-	v, err := json.Marshal(&resp)
-	if err != nil {
-		return Response{}, err
-	}
-	if e != nil {
-		return Response{ID: id, Result: nil, Error: e.Error()}, nil
-	}
-	raw := json.RawMessage{}
-	if err := raw.UnmarshalJSON(v); err != nil {
-		return Response{}, err
-	}
-
-	return Response{ID: id, Result: &raw}, nil
 }
 
 // Shutdown http server
@@ -112,7 +97,7 @@ func (s *Server) Add(method string, fn ServerFn) {
 	s.httpServer.Lock()
 	defer s.httpServer.Unlock()
 	if s.httpServer.Server != nil {
-		log.Printf("[WARN] ignored method %s, can't be added to activated server", method)
+		s.Logger.Logf("[WARN] ignored method %s, can't be added to activated server", method)
 		return
 	}
 
@@ -121,7 +106,7 @@ func (s *Server) Add(method string, fn ServerFn) {
 	})
 
 	s.funcs.m[method] = fn
-	log.Printf("[INFO] add handler for %s", method)
+	s.Logger.Logf("[INFO] add handler for %s", method)
 }
 
 // HandlersGroup alias for map of handlers
@@ -183,13 +168,10 @@ type L interface {
 }
 
 // Func type is an adapter to allow the use of ordinary functions as Logger.
-type Func func(format string, args ...interface{})
+type LoggerFunc func(format string, args ...interface{})
 
 // Logf calls f(id)
-func (f Func) Logf(format string, args ...interface{}) { f(format, args...) }
+func (f LoggerFunc) Logf(format string, args ...interface{}) { f(format, args...) }
 
 // NoOp logger
-var NoOp = Func(func(format string, args ...interface{}) {})
-
-// Std logger sends to std default logger directly
-var Std = Func(func(format string, args ...interface{}) { log.Printf(format, args...) })
+var NoOpLogger = LoggerFunc(func(format string, args ...interface{}) {})

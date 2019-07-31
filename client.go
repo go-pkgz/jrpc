@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"reflect"
 	"sync/atomic"
 
 	"github.com/pkg/errors"
@@ -12,12 +11,12 @@ import (
 
 // Client implements remote engine and delegates all calls to remote http server
 type Client struct {
-	API        string
+	API        string // URL to jrpc server with entrypoint, i.e. http://127.0.0.1:8080/command
 	Client     http.Client
 	AuthUser   string
 	AuthPasswd string
 
-	id uint64
+	id uint64 // used with atomic
 }
 
 // Call remote server with given method and arguments
@@ -32,7 +31,7 @@ func (r *Client) Call(method string, args ...interface{}) (*Response, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "marshaling failed for %s", method)
 		}
-	case len(args) == 1 && reflect.TypeOf(args[0]).Kind() == reflect.Struct:
+	case len(args) == 1:
 		b, err = json.Marshal(Request{Method: method, Params: args[0], ID: atomic.AddUint64(&r.id, 1)})
 		if err != nil {
 			return nil, errors.Wrapf(err, "marshaling failed for %s", method)
