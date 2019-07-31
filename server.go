@@ -167,11 +167,11 @@ type L interface {
 	Logf(format string, args ...interface{})
 }
 
-// Func type is an adapter to allow the use of ordinary functions as Logger.
+// LoggerFunc type is an adapter to allow the use of ordinary functions as Logger.
 type LoggerFunc func(format string, args ...interface{})
 
 // Logf calls f(id)
 func (f LoggerFunc) Logf(format string, args ...interface{}) { f(format, args...) }
 
-// NoOp logger
+// NoOpLogger logger does nothing
 var NoOpLogger = LoggerFunc(func(format string, args ...interface{}) {})

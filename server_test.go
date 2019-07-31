@@ -34,9 +34,7 @@ func TestServerPrimitiveTypes(t *testing.T) {
 		assert.Equal(t, 42., args[1].(float64))
 		assert.Equal(t, true, args[2].(bool))
 
-		r, err := EncodeResponse(id, respData{"res blah", true}, nil)
-		assert.NoError(t, err)
-		return r
+		return EncodeResponse(id, respData{"res blah", true}, nil)
 	})
 
 	go func() { _ = s.Run(9091) }()
@@ -88,10 +86,7 @@ func TestServerWithObject(t *testing.T) {
 			return Response{Error: err.Error()}
 		}
 		t.Logf("%+v", arg)
-
-		r, err := EncodeResponse(id, respData{"res blah", true}, nil)
-		assert.NoError(t, err)
-		return r
+		return EncodeResponse(id, respData{"res blah", true}, nil)
 	})
 
 	go func() { _ = s.Run(9091) }()
@@ -142,9 +137,7 @@ func TestServerWithAuth(t *testing.T) {
 		assert.Equal(t, 42., args[1].(float64))
 		assert.Equal(t, true, args[2].(bool))
 
-		r, err := EncodeResponse(id, "res blah", nil)
-		assert.NoError(t, err)
-		return r
+		return EncodeResponse(id, "res blah", nil)
 	})
 
 	go func() { _ = s.Run(9091) }()
@@ -180,9 +173,7 @@ func TestServerErrReturn(t *testing.T) {
 		assert.Equal(t, 42., args[1].(float64))
 		assert.Equal(t, true, args[2].(bool))
 
-		r, err := EncodeResponse(id, "res blah", errors.New("some error"))
-		assert.NoError(t, err)
-		return r
+		return EncodeResponse(id, "res blah", errors.New("some error"))
 	})
 
 	go func() { _ = s.Run(9091) }()

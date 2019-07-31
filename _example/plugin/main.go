@@ -73,11 +73,7 @@ func (j *jrpcServer) saveHndl(id uint64, params json.RawMessage) (rr jrpc.Respon
 	})
 
 	// encode response (recID)
-	var err error
-	if rr, err = jrpc.EncodeResponse(id, recID, nil); err != nil {
-		return jrpc.Response{Error: err.Error()}
-	}
-	return rr
+	return jrpc.EncodeResponse(id, recID, nil)
 }
 
 // loadHndl accepts record's ID (string value) as params, loads and returns corresponding dataRecord
@@ -100,11 +96,7 @@ func (j *jrpcServer) loadHndl(id uint64, params json.RawMessage) (rr jrpc.Respon
 	}
 
 	// encode response (dataRecord)
-	var err error
-	if rr, err = j.EncodeResponse(id, rec, nil); err != nil {
-		return jrpc.Response{Error: err.Error()}
-	}
-	return rr
+	return jrpc.EncodeResponse(id, rec, nil)
 }
 
 // run fn synced
