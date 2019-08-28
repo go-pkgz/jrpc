@@ -235,3 +235,16 @@ func TestServerNoHandlers(t *testing.T) {
 	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd"}
 	assert.EqualError(t, s.Run(9091), "nothing mapped for dispatch, Add has to be called prior to Run")
 }
+
+func TestServer_setDefaultLimits(t *testing.T) {
+	s := Server{}
+	s.setDefaultLimits()
+	assert.Equal(t, Limits{ServerThrottle: 1000, ClientLimit: 100, CallTimeout: 30 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 5 * time.Second}, s.Limits)
+
+	s.Limits = Limits{ServerThrottle: 123, ClientLimit: 12, CallTimeout: 3 * time.Second,
+		ReadHeaderTimeout: 1 * time.Second, WriteTimeout: 4 * time.Second, IdleTimeout: 2 * time.Second}
+	s.setDefaultLimits()
+	assert.Equal(t, Limits{ServerThrottle: 123, ClientLimit: 12, CallTimeout: 3 * time.Second,
+		ReadHeaderTimeout: 1 * time.Second, WriteTimeout: 4 * time.Second, IdleTimeout: 2 * time.Second}, s.Limits)
+}
