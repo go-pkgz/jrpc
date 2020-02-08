@@ -8,27 +8,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Set up Go 1.12
+    - name: Set up Go 1.13
       uses: actions/setup-go@v1
       with:
-        go-version: 1.12
+        go-version: 1.13
       id: go
 
     - name: Check out code into the Go module directory
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
-    - name: Prepare things
+    - name: Install golangci-lint
       run: |
-        curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b /home/runner/work/bin v1.17.1
-        export PATH=$PATH:/home/runner/work/bin:$GOPATH
-        golangci-lint --version
-        cd /home/runner/work && go get -v github.com/mattn/goveralls
+        curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $GITHUB_WORKSPACE v1.23.3
 
-    - name: Build & Test 
-      run: |  
-       export PATH=$PATH:/home/runner/work/bin:$GOPATH
-       export GOFLAGS="-mod=vendor"
-       export TZ=America/Chicago
-       go test -v -covermode=count -coverprofile=profile.cov ./...
-       golangci-lint run --tests=false ./...
-       go build
+    - name: Install goveralls
+      run: GO111MODULE=off go get -u -v github.com/mattn/goveralls
+
+    - name: Run linters
+      run: ./golangci-lint run --tests=false ./...
+
+    - name: Build & Test
+      run: |
+        go test -v -covermode=count -coverprofile=profile.cov ./...
+        go build
+      env:
+        TZ: America/Chicago
+
+    - name: Submit coverage
+      run: $(go env GOPATH)/bin/goveralls -service="github" -coverprofile=$GITHUB_WORKSPACE/profile.cov
+      env:
+        COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
