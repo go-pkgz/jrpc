@@ -92,8 +92,6 @@ func TestClient_CallBadResponse(t *testing.T) {
 }
 
 func TestClient_CallBadRemote(t *testing.T) {
-	ts := testServer(t, `{"method":"test","params":[123,"abc"],"id":1}`, `{"result":"12345"}`)
-	defer ts.Close()
 	c := Client{API: "http://127.0.0.2", Client: http.Client{Timeout: 10 * time.Millisecond}}
 	_, err := c.Call("test", 123)
 	assert.NotNil(t, err)
