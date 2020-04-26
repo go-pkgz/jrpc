@@ -23,7 +23,7 @@ func TestServerPrimitiveTypes(t *testing.T) {
 	}
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
-		args := []interface{}{}
+		var args []interface{}
 		if err := json.Unmarshal(params, &args); err != nil {
 			return Response{Error: err.Error()}
 		}
@@ -126,7 +126,7 @@ func TestServerWithAuth(t *testing.T) {
 	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd", Logger: NoOpLogger}
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
-		args := []interface{}{}
+		var args []interface{}
 		if err := json.Unmarshal(params, &args); err != nil {
 			return Response{Error: err.Error()}
 		}
@@ -162,7 +162,7 @@ func TestServerErrReturn(t *testing.T) {
 	s := Server{API: "/v1/cmd", AuthUser: "user", AuthPasswd: "passwd", Logger: NoOpLogger}
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
-		args := []interface{}{}
+		var args []interface{}
 		if err := json.Unmarshal(params, &args); err != nil {
 			return Response{Error: err.Error()}
 		}
