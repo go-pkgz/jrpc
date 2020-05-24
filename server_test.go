@@ -117,6 +117,7 @@ func TestServerMethodNotImplemented(t *testing.T) {
 	assert.NoError(t, json.NewEncoder(&buf).Encode(r))
 	resp, err := http.Post(ts.URL, "application/json", &buf)
 	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
 	assert.Equal(t, http.StatusNotImplemented, resp.StatusCode)
 
 	assert.EqualError(t, s.Shutdown(), "http server is not running")
