@@ -9,8 +9,8 @@ The protocol is a somewhat simplified version of json-rpc with a single POST cal
 ### Plugin (server)
 
 ```go
-// Server wraps jrpc.Server and adds synced map to store data
-type Puglin struct {
+// Plugin wraps jrpc.Server and adds synced map to store data
+type Plugin struct {
 	*jrpc.Server
 }
 
