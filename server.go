@@ -8,25 +8,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/didip/tollbooth/v6"
-	"github.com/didip/tollbooth_chi"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/go-pkgz/rest"
-	"github.com/go-pkgz/rest/logger"
 	"github.com/pkg/errors"
 )
 
 // Server is json-rpc server with an optional basic auth
 type Server struct {
-	API        string // url path, i.e. "/command" or "/rpc" etc.
-	AuthUser   string // basic auth user name, should match Client.AuthUser, optional
-	AuthPasswd string // basic auth password, should match Client.AuthPasswd, optional
-	Version    string // server version, injected from main and used for informational headers only
-	AppName    string // plugin name, injected from main and used for informational headers only
-	Limits     Limits // all max values and timeouts for the server
-	Logger     L      // logger, if nil will default to NoOpLogger
+	API               string      // url path, i.e. "/command" or "/rpc" etc.
+	AuthUser          string      // basic auth user name, should match Client.AuthUser, optional
+	AuthPasswd        string      // basic auth password, should match Client.AuthPasswd, optional
+	CustomMiddlewares Middlewares // list of custom middlewares, should match array of http.Handler func, optional
+	Version           string      // server version, injected from main and used for informational headers only
+	AppName           string      // plugin name, injected from main and used for informational headers only
+	Limits            Limits      // all max values and timeouts for the server
+	Logger            L           // logger, if nil will default to NoOpLogger
 
 	funcs struct {
 		m    map[string]ServerFn
@@ -53,6 +51,9 @@ type Limits struct {
 // Implementations provided by consumer and defines response logic.
 type ServerFn func(id uint64, params json.RawMessage) Response
 
+// Middlewares contains list of custom middlewares which user can attach to server
+type Middlewares []func(http.Handler) http.Handler
+
 // Run http server on given port
 func (s *Server) Run(port int) error {
 	if s.Logger == nil {
@@ -67,13 +68,11 @@ func (s *Server) Run(port int) error {
 	s.setDefaultLimits()
 
 	router := chi.NewRouter()
-	router.Use(middleware.Throttle(s.Limits.ServerThrottle), middleware.RealIP, rest.Recoverer(s.Logger))
 	router.Use(rest.AppInfo(s.AppName, "umputun", s.Version), rest.Ping)
-	logInfoWithBody := logger.New(logger.Log(s.Logger), logger.WithBody, logger.Prefix("[DEBUG]")).Handler
 	router.Use(middleware.Timeout(s.Limits.CallTimeout))
-	router.Use(logInfoWithBody, tollbooth_chi.LimitHandler(tollbooth.NewLimiter(s.Limits.ClientLimit, nil)), middleware.NoCache)
+	router.Use(middleware.NoCache)
 	router.Use(s.basicAuth)
-
+	router.Use(s.CustomMiddlewares...)
 	router.Post(s.API, s.handler)
 
 	s.httpServer.Lock()

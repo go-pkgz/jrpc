@@ -249,3 +249,56 @@ func TestServer_setDefaultLimits(t *testing.T) {
 	assert.Equal(t, Limits{ServerThrottle: 123, ClientLimit: 12, CallTimeout: 3 * time.Second,
 		ReadHeaderTimeout: 1 * time.Second, WriteTimeout: 4 * time.Second, IdleTimeout: 2 * time.Second}, s.Limits)
 }
+
+func TestServerCustomMiddlewares(t *testing.T) {
+
+	testMiddlewareGetPathFn := func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, r.Method, "POST")
+			assert.Equal(t, r.URL.Path, "/v1/test")
+
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			next.ServeHTTP(w, r)
+		}
+		return http.HandlerFunc(fn)
+	}
+
+	testMiddlewareGetValueFn := func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, r.Method, "POST")
+			assert.Equal(t, r.URL.Path, "/v1/test")
+
+			value, isValue := r.URL.Query()["value"]
+			assert.True(t, isValue)
+			assert.Equal(t, value[0], "test")
+
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			next.ServeHTTP(w, r)
+		}
+		return http.HandlerFunc(fn)
+	}
+
+	s := Server{API: "/v1/test", Logger: NoOpLogger, CustomMiddlewares: Middlewares{testMiddlewareGetPathFn, testMiddlewareGetValueFn}}
+	s.Add("fn1", func(id uint64, params json.RawMessage) Response {
+		return Response{}
+	})
+	go func() { _ = s.Run(9091) }()
+	time.Sleep(10 * time.Millisecond)
+
+	c := Client{API: "http://127.0.0.1:9091/v1/test?value=test", Client: http.Client{}}
+	_, err := c.Call("fn1")
+	assert.NoError(t, err)
+	time.Sleep(10 * time.Millisecond)
+
+	// test with empty CustomMiddlewares
+
+	s = Server{API: "/v1/test", Logger: NoOpLogger}
+	s.Add("fn1", func(id uint64, params json.RawMessage) Response {
+		return Response{}
+	})
+	go func() { _ = s.Run(9091) }()
+	time.Sleep(10 * time.Millisecond)
+	defer func() { assert.NoError(t, s.Shutdown()) }()
+}

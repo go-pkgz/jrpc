@@ -29,7 +29,43 @@ plugin.Add("mycommand", func(id uint64, params json.RawMessage) Response {
     return jrpc.EncodeResponse(id, "hello, it works", nil)
 })
 ```
+##### Use Custom Middlewares
+You can define custom middleware handlers with `CustomMiddlewares` option. It's option has internal type `Middlewares`  which is array of handler functions.
+```go
+type Middlewares []func(http.Handler) http.Handler
+``` 
+*Example of use:*
+```go
+// use personal logger as middleware func you should define logger as handler 
+logInfoWithBody := logger.New(logger.Log(s.Logger), logger.WithBody, logger.Prefix("[DEBUG]")).Handler
 
+// then add to Server CustomMiddlewares option
+plugin := jrpcServer{
+    Server: &jrpc.Server{
+       ...
+        CustomMiddlewares: Middlewares{logInfoWithBody} // custom middleware
+      ...
+    },
+}
+```
+If you want add more custom middlewares you can add them like this:
+```go
+plugin := jrpcServer{
+    Server: &jrpc.Server{
+       ...
+        // list of custom middlewares
+        CustomMiddlewares: Middlewares{
+                middleware.Throttle(s.Limits.ServerThrottle), 
+                middleware.RealIP, 
+                rest.Recoverer(s.Logger),
+                tollbooth_chi.LimitHandler(tollbooth.NewLimiter(s.Limits.ClientLimit, nil)),
+            } 
+      ...
+    },
+}
+```
+**NOTICE:**
+Such middlewares as `AppInfo`,`Ping`,`NoCache` and `basicAuth` define by default.
 ### Application (client)
 
 ```go
