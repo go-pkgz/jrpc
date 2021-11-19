@@ -55,17 +55,16 @@ plugin := jrpcServer{
        ...
         // list of custom middlewares
         CustomMiddlewares: Middlewares{
-                middleware.Throttle(s.Limits.ServerThrottle), 
-                middleware.RealIP, 
-                rest.Recoverer(s.Logger),
-                tollbooth_chi.LimitHandler(tollbooth.NewLimiter(s.Limits.ClientLimit, nil)),
+                middleware.Heartbeat('/ping'), 
+                middleware.Profiler, 
+                middleware. StripSlashes,
             } 
       ...
     },
 }
 ```
 **NOTICE:**
-Such middlewares as `AppInfo`,`Ping`,`NoCache` and `basicAuth` define by default.
+Such middlewares as `Throttle`,`RealIP`,`Recoverer`,`AppInfo`,`Ping`,`NoCache` and `basicAuth` define by default.
 ### Application (client)
 
 ```go

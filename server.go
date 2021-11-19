@@ -68,6 +68,7 @@ func (s *Server) Run(port int) error {
 	s.setDefaultLimits()
 
 	router := chi.NewRouter()
+	router.Use(middleware.Throttle(s.Limits.ServerThrottle), middleware.RealIP, rest.Recoverer(s.Logger))
 	router.Use(rest.AppInfo(s.AppName, "umputun", s.Version), rest.Ping)
 	router.Use(middleware.Timeout(s.Limits.CallTimeout))
 	router.Use(middleware.NoCache)

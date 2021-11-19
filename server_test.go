@@ -300,5 +300,5 @@ func TestServerCustomMiddlewares(t *testing.T) {
 	})
 	go func() { _ = s.Run(9091) }()
 	time.Sleep(10 * time.Millisecond)
-	defer func() { assert.NoError(t, s.Shutdown()) }()
+	assert.NoError(t, s.Shutdown())
 }
