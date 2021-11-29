@@ -14,22 +14,43 @@ type Plugin struct {
 	*jrpc.Server
 }
 
-// create plugin (jrpc server)
-plugin := jrpcServer{
-    Server: &jrpc.Server{
-        API:        "/command",     // base url for rpc calls
-        AuthUser:   "user",         // basic auth user name
-        AuthPasswd: "password",     // basic auth password
-        AppName:    "jrpc-example", // plugin name for headers
-        Logger:     logger,
-    },
-}
+// create plugin (jrpc server) with NewServer where required param is a base url for rpc calls
+plugin := NewServer("/command")
 
+// then add you function to map 
 plugin.Add("mycommand", func(id uint64, params json.RawMessage) Response {
     return jrpc.EncodeResponse(id, "hello, it works", nil)
 })
+
+// and run server with port number value
+plugin.Run(9090)
 ```
 
+The constructor `NewServer` accept two parameters:
+* `API` - a base url for rpc calls
+* `Options` - allows configure server parameters such is timeouts, logger, limits, middlewares and etc.  
+
+##### options
+`jrpc.NewServer` call accepts functional options:
+* `jrpc.Auth` - set credentials basic auth to server, accepts `username` and `password`
+* `jrpc.WithTimeout` - sets global timeouts for server requests, such as read, write and idle. Call accept `Timeouts` struct.
+* `jrpc.WithLimits` - define limit for server call, accepts limit value in `float64` type
+* `jrpc.WithThrottler` - sets throttler middleware with specify limit value
+* `jrpc.WithMiddlewares` - sets custom middlewares list to server, accepts list of handler with idiomatic type `func(http.Handler) http.Handler`
+* `jrpc.WithtSignature` - sets server signature, accept appName, author and version. Disable by default. 
+* `jrpc.WithLogger` - define custom logger (e.g. [lgr](https://github.com/go-pkgz/lgr))
+
+Example with options:
+```go
+plugin := NewServer("/command",
+		WithTimeout(Timeouts{ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 10 * time.Second}),
+		WithThrottler(120),
+		WithLimits(100), 
+		WithMiddlewares(middleware.Heartbeat('/ping'), middleware.Profiler, middleware. StripSlashes),
+)
+``` 
+**NOTICE:**
+Such middlewares as `RealIP`,`Recoverer`,`Ping`,`NoCache` and `basicAuth` define by default.
 ### Application (client)
 
 ```go

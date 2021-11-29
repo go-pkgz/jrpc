@@ -38,13 +38,12 @@ func main() {
 
 	// create rpcServer
 	rpcServer := jrpcServer{
-		Server: &jrpc.Server{
-			API:        "/command",     // base url for rpc calls
-			AuthUser:   "user",         // basic auth user name
-			AuthPasswd: "password",     // basic auth password
-			AppName:    "jrpc-example", // plugin name for headers
-			Logger:     logger,
-		},
+		Server: jrpc.NewServer(
+			"/command", // base url for rpc calls
+			jrpc.Auth("user", "password"), // basic auth user name and password
+			jrpc.WithSignature("jrpc-example", "umputun", "0.1.0"), // plugin name for headers
+			jrpc.WithLogger(logger), // define logger
+		),
 		data: map[string]dataRecord{},
 	}
 
