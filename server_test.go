@@ -313,7 +313,7 @@ func TestServer_WithSignature(t *testing.T) {
 	}
 
 	s = NewServer("/v1/cmd", WithSignature("testApp", "testAuthor", "0.1.0"), WithMiddlewares(checkSignatureMiddlewareFn))
-	assert.Equal(t, &signaturePayload{"testApp", "testAuthor", "0.1.0"}, s.signature)
+	assert.Equal(t, signaturePayload{"testApp", "testAuthor", "0.1.0"}, s.signature)
 
 	s.Add("fn1", func(id uint64, params json.RawMessage) Response {
 		return Response{}

@@ -54,7 +54,7 @@ func WithMiddlewares(middlewares ...func(http.Handler) http.Handler) Option {
 // WithSignature sets signature data for server response headers
 func WithSignature(appName, author, version string) Option {
 	return func(s *Server) {
-		s.signature = &signaturePayload{
+		s.signature = signaturePayload{
 			appName: appName,
 			author:  author,
 			version: version,

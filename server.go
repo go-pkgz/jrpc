@@ -26,8 +26,7 @@ type Server struct {
 	authPasswd        string      // basic auth password, should match Client.AuthPasswd, optional
 	customMiddlewares middlewares // list of custom middlewares, should match array of http.Handler func, optional
 
-	// use as pointer for checks all fields at one time
-	signature *signaturePayload // add server signature to server response headers appName, author, version), disable by default
+	signature signaturePayload // add server signature to server response headers appName, author, version), disable by default
 
 	timeouts Timeouts // values and timeouts for the server
 	limits   limits   // values and limits for the server
@@ -106,7 +105,7 @@ func (s *Server) Run(port int) error {
 
 	router.Use(middleware.RealIP, rest.Ping, rest.Recoverer(s.logger))
 
-	if s.signature != nil {
+	if s.signature.version != "" || s.signature.author != "" || s.signature.appName != "" {
 		router.Use(rest.AppInfo(s.signature.appName, s.signature.author, s.signature.version))
 	}
 
