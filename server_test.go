@@ -3,6 +3,7 @@ package jrpc
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -176,7 +176,7 @@ func TestServerErrReturn(t *testing.T) {
 		assert.Equal(t, 42., args[1].(float64))
 		assert.Equal(t, true, args[2].(bool))
 
-		return EncodeResponse(id, "res blah", errors.New("some error"))
+		return EncodeResponse(id, "res blah", fmt.Errorf("some error"))
 	})
 
 	go func() { _ = s.Run(9091) }()
