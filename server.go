@@ -8,14 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/didip/tollbooth/v6"
+	"github.com/didip/tollbooth/v7"
 	"github.com/didip/tollbooth_chi"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/go-pkgz/rest"
 	"github.com/go-pkgz/rest/logger"
-	"github.com/pkg/errors"
 )
 
 // Server is json-rpc server with an optional basic auth
@@ -94,7 +93,7 @@ func (s *Server) Run(port int) error {
 	}
 
 	if s.funcs.m == nil && len(s.funcs.m) == 0 {
-		return errors.Errorf("nothing mapped for dispatch, Add has to be called prior to Run")
+		return fmt.Errorf("nothing mapped for dispatch, Add has to be called prior to Run")
 	}
 
 	router := chi.NewRouter()
@@ -144,7 +143,7 @@ func (s *Server) Shutdown() error {
 	s.httpServer.Lock()
 	defer s.httpServer.Unlock()
 	if s.httpServer.Server == nil {
-		return errors.Errorf("http server is not running")
+		return fmt.Errorf("http server is not running")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -192,7 +191,7 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	}
 	fn, ok := s.funcs.m[req.Method]
 	if !ok {
-		rest.SendErrorJSON(w, r, s.logger, http.StatusNotImplemented, errors.New("unsupported method"), req.Method)
+		rest.SendErrorJSON(w, r, s.logger, http.StatusNotImplemented, fmt.Errorf("unsupported method"), req.Method)
 		return
 
 	}
