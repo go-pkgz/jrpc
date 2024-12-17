@@ -243,4 +243,4 @@ type LoggerFunc func(format string, args ...interface{})
 func (f LoggerFunc) Logf(format string, args ...interface{}) { f(format, args...) }
 
 // NoOpLogger logger does nothing
-var NoOpLogger = LoggerFunc(func(format string, args ...interface{}) {})
+var NoOpLogger = LoggerFunc(func(format string, args ...interface{}) {}) //nolint
