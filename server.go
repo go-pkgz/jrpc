@@ -12,7 +12,6 @@ import (
 	"github.com/didip/tollbooth/v8/limiter"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/render"
 	"github.com/go-pkgz/rest"
 	"github.com/go-pkgz/rest/logger"
 )
@@ -203,7 +202,7 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 		params = *req.Params
 	}
 
-	render.JSON(w, r, fn(req.ID, params))
+	rest.RenderJSON(w, fn(req.ID, params))
 }
 
 // basicAuth middleware. enabled only if both AuthUser and AuthPasswd defined.

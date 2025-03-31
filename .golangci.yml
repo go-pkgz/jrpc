@@ -1,12 +1,9 @@
 linters-settings:
   govet:
-    shadow: true
-  golint:
-    min-confidence: 0.6
+    enable:
+      - shadow
   gocyclo:
     min-complexity: 15
-  maligned:
-    suggest-new: true
   dupl:
     threshold: 100
   goconst:
@@ -29,23 +26,22 @@ linters-settings:
 linters:
   disable-all: true
   enable:
-    - revive
-    - govet
-    - unconvert
-    - gosec
-    - unparam
-    - unused
-    - typecheck
-    - ineffassign
-    - stylecheck
     - gochecknoinits
     - gocritic
-    - nakedret
+    - gosec
     - gosimple
+    - govet
+    - ineffassign
+    - nakedret
     - prealloc
+    - revive
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
 
   fast: false
-
 
 run:
   concurrency: 4
@@ -54,9 +50,6 @@ issues:
   exclude-dirs:
     - vendor
   exclude-rules:
-    - text: "should have a package comment, unless it's in another file for this package"
-      linters:
-        - golint
     - text: "exitAfterDefer:"
       linters:
         - gocritic
@@ -100,4 +93,3 @@ issues:
       path: _test\.go$
       text: "unused-parameter"
   exclude-use-default: false
-
