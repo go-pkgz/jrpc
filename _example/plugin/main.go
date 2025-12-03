@@ -31,7 +31,7 @@ type jrpcServer struct {
 func main() {
 
 	// optional logger implementing a single func interface
-	// Logf(format string, args ...interface{})
+	// logf(format string, args ...interface{})
 	logger := jrpc.LoggerFunc(func(format string, args ...interface{}) {
 		log.Printf(format, args...)
 	})
@@ -39,10 +39,10 @@ func main() {
 	// create rpcServer
 	rpcServer := jrpcServer{
 		Server: jrpc.NewServer(
-			"/command", // base url for rpc calls
+			"/command",                    // base url for rpc calls
 			jrpc.Auth("user", "password"), // basic auth user name and password
 			jrpc.WithSignature("jrpc-example", "umputun", "0.1.0"), // plugin name for headers
-			jrpc.WithLogger(logger), // define logger
+			jrpc.WithLogger(logger),                                // define logger
 		),
 		data: map[string]dataRecord{},
 	}

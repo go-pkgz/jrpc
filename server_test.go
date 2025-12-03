@@ -384,3 +384,99 @@ func TestServer_WithLogger(t *testing.T) {
 type testLogger struct{}
 
 func (l testLogger) Logf(format string, args ...interface{}) {}
+
+func TestRateLimitByIP(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	t.Run("allows requests within limit", func(t *testing.T) {
+		limiter := rateLimitByIP(5) // 5 req/sec
+		ts := httptest.NewServer(limiter(handler))
+		defer ts.Close()
+
+		for i := 0; i < 5; i++ {
+			resp, err := http.Get(ts.URL)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			_ = resp.Body.Close()
+		}
+	})
+
+	t.Run("rejects requests over limit", func(t *testing.T) {
+		limiter := rateLimitByIP(2) // 2 req/sec
+		ts := httptest.NewServer(limiter(handler))
+		defer ts.Close()
+
+		var rejected bool
+		for i := 0; i < 10; i++ {
+			resp, err := http.Get(ts.URL)
+			require.NoError(t, err)
+			if resp.StatusCode == http.StatusTooManyRequests {
+				rejected = true
+			}
+			_ = resp.Body.Close()
+		}
+		assert.True(t, rejected, "expected at least one request to be rate limited")
+	})
+
+	t.Run("uses X-Real-IP header", func(t *testing.T) {
+		limiter := rateLimitByIP(1) // 1 req/sec per IP
+		ts := httptest.NewServer(limiter(handler))
+		defer ts.Close()
+
+		client := &http.Client{}
+
+		// first request from IP1 should succeed
+		req1, _ := http.NewRequest("GET", ts.URL, http.NoBody)
+		req1.Header.Set("X-Real-IP", "1.1.1.1")
+		resp1, err := client.Do(req1)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp1.StatusCode)
+		_ = resp1.Body.Close()
+
+		// second request from IP1 should be rate limited
+		req2, _ := http.NewRequest("GET", ts.URL, http.NoBody)
+		req2.Header.Set("X-Real-IP", "1.1.1.1")
+		resp2, err := client.Do(req2)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusTooManyRequests, resp2.StatusCode)
+		_ = resp2.Body.Close()
+
+		// request from different IP should succeed
+		req3, _ := http.NewRequest("GET", ts.URL, http.NoBody)
+		req3.Header.Set("X-Real-IP", "2.2.2.2")
+		resp3, err := client.Do(req3)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp3.StatusCode)
+		_ = resp3.Body.Close()
+	})
+
+	t.Run("refills tokens over time", func(t *testing.T) {
+		limiter := rateLimitByIP(10) // 10 req/sec
+		ts := httptest.NewServer(limiter(handler))
+		defer ts.Close()
+
+		// exhaust all tokens
+		for i := 0; i < 10; i++ {
+			resp, err := http.Get(ts.URL)
+			require.NoError(t, err)
+			_ = resp.Body.Close()
+		}
+
+		// should be rate limited
+		resp, err := http.Get(ts.URL)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		_ = resp.Body.Close()
+
+		// wait for tokens to refill
+		time.Sleep(200 * time.Millisecond)
+
+		// should succeed after refill
+		resp, err = http.Get(ts.URL)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		_ = resp.Body.Close()
+	})
+}
