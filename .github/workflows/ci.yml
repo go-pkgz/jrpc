@@ -6,14 +6,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Set up Go 1.23
-        uses: actions/setup-go@v2
-        with:
-          go-version: "1.23"
-        id: go
+      - name: checkout
+        uses: actions/checkout@v4
 
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
+      - name: set up go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+        id: go
 
       - name: Build & Test
         run: |
@@ -26,9 +26,7 @@ jobs:
           TZ: "America/Chicago"
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest
+        uses: golangci/golangci-lint-action@v7
 
       - name: install goveralls
         run: |
