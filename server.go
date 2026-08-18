@@ -253,14 +253,11 @@ func getDefaultTimeouts() Timeouts {
 	}
 }
 
-// timeout middleware cancels context after given duration
+// timeout middleware limits the time allowed for the call, responds with 503 and drops
+// the late handler writes if the deadline reached
 func timeout(dt time.Duration) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, cancel := context.WithTimeout(r.Context(), dt)
-			defer cancel()
-			h.ServeHTTP(w, r.WithContext(ctx))
-		})
+		return http.TimeoutHandler(h, dt, `{"error":"call timeout"}`)
 	}
 }
 

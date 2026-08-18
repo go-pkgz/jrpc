@@ -511,3 +511,48 @@ func TestServerServeNotActivated(t *testing.T) {
 	s := NewServer("/v1/cmd")
 	assert.EqualError(t, s.serve(l), "server is not activated")
 }
+
+func TestServerCallTimeout(t *testing.T) {
+	s := NewServer("/v1/cmd", WithTimeouts(Timeouts{
+		ReadHeaderTimeout: time.Second,
+		WriteTimeout:      5 * time.Second,
+		IdleTimeout:       time.Second,
+		CallTimeout:       50 * time.Millisecond,
+	}))
+
+	s.Add("fast", func(id uint64, _ json.RawMessage) Response {
+		return EncodeResponse(id, "done", nil)
+	})
+	s.Add("slow", func(id uint64, _ json.RawMessage) Response {
+		time.Sleep(500 * time.Millisecond)
+		return EncodeResponse(id, "too late", nil)
+	})
+
+	url := startServer(t, s)
+
+	t.Run("call within timeout", func(t *testing.T) {
+		c := Client{API: url + "/v1/cmd", Client: http.Client{}}
+		r, err := c.Call("fast")
+		require.NoError(t, err)
+		val := ""
+		require.NoError(t, json.Unmarshal(*r.Result, &val))
+		assert.Equal(t, "done", val)
+	})
+
+	t.Run("call over timeout aborted with 503", func(t *testing.T) {
+		b := bytes.Buffer{}
+		require.NoError(t, json.NewEncoder(&b).Encode(Request{Method: "slow", ID: 1}))
+
+		st := time.Now()
+		resp, err := http.Post(url+"/v1/cmd", "application/json", &b)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+		assert.Less(t, time.Since(st), 300*time.Millisecond, "response should not wait for the handler to finish")
+
+		data, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, `{"error":"call timeout"}`, string(data))
+	})
+}
