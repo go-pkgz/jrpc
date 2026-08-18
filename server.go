@@ -90,12 +90,13 @@ func (s *Server) Run(port int) error {
 		return fmt.Errorf("nothing mapped for dispatch, Add has to be called prior to Run")
 	}
 
+	s.activate()
+
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return fmt.Errorf("can't listen on port %d: %w", port, err)
 	}
 
-	s.activate()
 	return s.serve(ln)
 }
 

@@ -32,7 +32,9 @@ The constructor `NewServer` accepts two parameters:
   * `Auth` - sets basic auth credentials, accepts `username` and `password`. Auth is enforced only if both of them
     set to non-empty values; setting just one leaves the server serving every request unauthenticated
   * `WithTimeouts` - sets server timeouts, accepts a `Timeouts` struct with `ReadHeaderTimeout`, `WriteTimeout`,
-    `IdleTimeout` and `CallTimeout`. `CallTimeout` limits the time allowed for a single call and responds with `503` if exceeded
+    `IdleTimeout` and `CallTimeout`. `CallTimeout` limits the time allowed for a single call and responds with `503` if
+    exceeded, and has to be set below `WriteTimeout`, otherwise the write deadline kills the connection before the
+    `503` can be sent
   * `WithLimits` - defines a limit of calls/sec per client, accepts limit value in `float64` type
   * `WithThrottler` - sets throttler middleware limiting the number of parallel calls to the server
   * `WithSignature` - sets server signature, accepts appName, author and version. Disabled by default
@@ -52,9 +54,9 @@ plugin := jrpc.NewServer("/command",
 	jrpc.Auth("user", "password"),
 	jrpc.WithTimeouts(jrpc.Timeouts{
 		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      5 * time.Second,
+		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       10 * time.Second,
-		CallTimeout:       30 * time.Second,
+		CallTimeout:       25 * time.Second,
 	}),
 	jrpc.WithThrottler(120),
 	jrpc.WithLimits(100),

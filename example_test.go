@@ -28,9 +28,9 @@ func ExampleNewServer_options() {
 		jrpc.Auth("user", "password"),
 		jrpc.WithTimeouts(jrpc.Timeouts{
 			ReadHeaderTimeout: 5 * time.Second,
-			WriteTimeout:      5 * time.Second,
+			WriteTimeout:      30 * time.Second,
 			IdleTimeout:       10 * time.Second,
-			CallTimeout:       30 * time.Second,
+			CallTimeout:       25 * time.Second,
 		}),
 		jrpc.WithThrottler(120),
 		jrpc.WithLimits(100),
