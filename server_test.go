@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -24,7 +25,7 @@ func TestServerPrimitiveTypes(t *testing.T) {
 	}
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
-		var args []interface{}
+		var args []any
 		if err := json.Unmarshal(params, &args); err != nil {
 			return Response{Error: err.Error()}
 		}
@@ -38,15 +39,13 @@ func TestServerPrimitiveTypes(t *testing.T) {
 		return EncodeResponse(id, respData{"res blah", true}, nil)
 	})
 
-	go func() { _ = s.Run(9091) }()
-	defer func() { assert.NoError(t, s.Shutdown()) }()
-	time.Sleep(10 * time.Millisecond)
+	url := startServer(t, s)
 
 	// check with direct http call
-	clientReq := Request{Method: "test", Params: []interface{}{"blah", 42, true}, ID: 123}
+	clientReq := Request{Method: "test", Params: []any{"blah", 42, true}, ID: 123}
 	b := bytes.Buffer{}
 	require.NoError(t, json.NewEncoder(&b).Encode(clientReq))
-	resp, err := http.Post("http://127.0.0.1:9091/v1/cmd", "application/json", &b)
+	resp, err := http.Post(url+"/v1/cmd", "application/json", &b)
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, 200, resp.StatusCode)
@@ -55,7 +54,7 @@ func TestServerPrimitiveTypes(t *testing.T) {
 	assert.Equal(t, `{"result":{"Res1":"res blah","Res2":true},"id":123}`+"\n", string(data))
 
 	// check with client call
-	c := Client{API: "http://127.0.0.1:9091/v1/cmd", Client: http.Client{}}
+	c := Client{API: url + "/v1/cmd", Client: http.Client{}}
 	r, err := c.Call("test", "blah", 42, true)
 	assert.NoError(t, err)
 	assert.Equal(t, "", r.Error)
@@ -90,11 +89,9 @@ func TestServerWithObject(t *testing.T) {
 		return EncodeResponse(id, respData{"res blah", true}, nil)
 	})
 
-	go func() { _ = s.Run(9091) }()
-	defer func() { assert.NoError(t, s.Shutdown()) }()
-	time.Sleep(10 * time.Millisecond)
+	url := startServer(t, s)
 
-	c := Client{API: "http://127.0.0.1:9091/v1/cmd", Client: http.Client{}}
+	c := Client{API: url + "/v1/cmd", Client: http.Client{}}
 	r, err := c.Call("test", reqData{Time: time.Now(), F1: "sawert", F2: time.Minute})
 	assert.NoError(t, err)
 	assert.Equal(t, "", r.Error)
@@ -129,7 +126,7 @@ func TestServerWithAuth(t *testing.T) {
 	s := NewServer("/v1/cmd", Auth("user", "passwd"))
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
-		var args []interface{}
+		var args []any
 		if err := json.Unmarshal(params, &args); err != nil {
 			return Response{Error: err.Error()}
 		}
@@ -143,11 +140,9 @@ func TestServerWithAuth(t *testing.T) {
 		return EncodeResponse(id, "res blah", nil)
 	})
 
-	go func() { _ = s.Run(9091) }()
-	time.Sleep(10 * time.Millisecond)
-	defer func() { assert.NoError(t, s.Shutdown()) }()
+	url := startServer(t, s)
 
-	c := Client{API: "http://127.0.0.1:9091/v1/cmd", Client: http.Client{}, AuthUser: "user", AuthPasswd: "passwd"}
+	c := Client{API: url + "/v1/cmd", Client: http.Client{}, AuthUser: "user", AuthPasswd: "passwd"}
 	r, err := c.Call("test", "blah", 42, true)
 	assert.NoError(t, err)
 	assert.Equal(t, "", r.Error)
@@ -156,7 +151,7 @@ func TestServerWithAuth(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "res blah", val)
 
-	c = Client{API: "http://127.0.0.1:9091/v1/cmd", Client: http.Client{}}
+	c = Client{API: url + "/v1/cmd", Client: http.Client{}}
 	_, err = c.Call("test", "blah", 42, true)
 	assert.EqualError(t, err, "bad status 401 Unauthorized for test")
 }
@@ -165,7 +160,7 @@ func TestServerErrReturn(t *testing.T) {
 	s := NewServer("/v1/cmd", Auth("user", "passwd"))
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
-		var args []interface{}
+		var args []any
 		if err := json.Unmarshal(params, &args); err != nil {
 			return Response{Error: err.Error()}
 		}
@@ -179,11 +174,9 @@ func TestServerErrReturn(t *testing.T) {
 		return EncodeResponse(id, "res blah", fmt.Errorf("some error"))
 	})
 
-	go func() { _ = s.Run(9091) }()
-	defer func() { assert.NoError(t, s.Shutdown()) }()
-	time.Sleep(10 * time.Millisecond)
+	url := startServer(t, s)
 
-	c := Client{API: "http://127.0.0.1:9091/v1/cmd", Client: http.Client{}, AuthUser: "user", AuthPasswd: "passwd"}
+	c := Client{API: url + "/v1/cmd", Client: http.Client{}, AuthUser: "user", AuthPasswd: "passwd"}
 	_, err := c.Call("test", "blah", 42, true)
 	assert.EqualError(t, err, "some error")
 }
@@ -200,11 +193,9 @@ func TestServerGroup(t *testing.T) {
 		},
 	})
 
-	go func() { _ = s.Run(9091) }()
-	defer func() { assert.NoError(t, s.Shutdown()) }()
-	time.Sleep(10 * time.Millisecond)
+	url := startServer(t, s)
 
-	c := Client{API: "http://127.0.0.1:9091/v1/cmd", Client: http.Client{}}
+	c := Client{API: url + "/v1/cmd", Client: http.Client{}}
 	_, err := c.Call("fn1")
 	assert.EqualError(t, err, "bad status 501 Not Implemented for fn1")
 
@@ -220,16 +211,14 @@ func TestServerAddLate(t *testing.T) {
 	s.Add("fn1", func(id uint64, params json.RawMessage) Response {
 		return Response{}
 	})
-	go func() { _ = s.Run(9091) }()
-	defer func() { assert.NoError(t, s.Shutdown()) }()
-	time.Sleep(10 * time.Millisecond)
+	url := startServer(t, s)
 
 	// too late, ignored after run
 	s.Add("fn2", func(id uint64, params json.RawMessage) Response {
 		return Response{}
 	})
 
-	c := Client{API: "http://127.0.0.1:9091/v1/cmd", Client: http.Client{}}
+	c := Client{API: url + "/v1/cmd", Client: http.Client{}}
 	_, err := c.Call("fn1")
 	assert.NoError(t, err)
 	_, err = c.Call("fn2")
@@ -238,7 +227,7 @@ func TestServerAddLate(t *testing.T) {
 
 func TestServerNoHandlers(t *testing.T) {
 	s := NewServer("/v1/cmd", Auth("user", "passwd"))
-	assert.EqualError(t, s.Run(9091), "nothing mapped for dispatch, Add has to be called prior to Run")
+	assert.EqualError(t, s.Run(0), "nothing mapped for dispatch, Add has to be called prior to Run")
 }
 
 func TestServer_getDefaultTimeouts(t *testing.T) {
@@ -291,14 +280,11 @@ func TestServer_WithSignature(t *testing.T) {
 	s.Add("fn1", func(id uint64, params json.RawMessage) Response {
 		return Response{}
 	})
-	go func() { _ = s.Run(9091) }()
-	time.Sleep(10 * time.Millisecond)
+	url := startServer(t, s)
 
-	c := Client{API: "http://127.0.0.1:9091/v1/cmd", Client: http.Client{}}
+	c := Client{API: url + "/v1/cmd", Client: http.Client{}}
 	_, err := c.Call("fn1")
 	assert.NoError(t, err)
-	assert.NoError(t, s.Shutdown())
-	time.Sleep(10 * time.Millisecond)
 
 	// checking signature with server response
 	checkSignatureMiddlewareFn = func(next http.Handler) http.Handler {
@@ -319,14 +305,11 @@ func TestServer_WithSignature(t *testing.T) {
 		return Response{}
 	})
 
-	go func() { _ = s.Run(9091) }()
-	defer func() { assert.NoError(t, s.Shutdown()) }()
-	time.Sleep(10 * time.Millisecond)
+	signedURL := startServer(t, s)
 
-	c = Client{API: "http://127.0.0.1:9091/v1/cmd", Client: http.Client{}}
+	c = Client{API: signedURL + "/v1/cmd", Client: http.Client{}}
 	_, err = c.Call("fn1")
 	assert.NoError(t, err)
-
 }
 
 func TestServerCustomMiddlewares(t *testing.T) {
@@ -363,27 +346,24 @@ func TestServerCustomMiddlewares(t *testing.T) {
 	s.Add("fn1", func(id uint64, params json.RawMessage) Response {
 		return Response{}
 	})
-	go func() { _ = s.Run(9091) }()
-	time.Sleep(10 * time.Millisecond)
-	defer func() { assert.NoError(t, s.Shutdown()) }()
-	c := Client{API: "http://127.0.0.1:9091/v1/cmd?value=test", Client: http.Client{}}
+	url := startServer(t, s)
+
+	c := Client{API: url + "/v1/cmd?value=test", Client: http.Client{}}
 	_, err := c.Call("fn1")
 	assert.NoError(t, err)
-	time.Sleep(10 * time.Millisecond)
-
 }
 
 func TestServer_WithLogger(t *testing.T) {
 	s := NewServer("")
-	assert.Equal(t, reflect.TypeOf(s.logger), reflect.TypeOf(NoOpLogger))
+	assert.Equal(t, reflect.TypeOf(s.logger), reflect.TypeFor[LoggerFunc]())
 
 	s = NewServer("", WithLogger(testLogger{}))
-	assert.Equal(t, reflect.TypeOf(s.logger), reflect.TypeOf(testLogger{}))
+	assert.Equal(t, reflect.TypeOf(s.logger), reflect.TypeFor[testLogger]())
 }
 
 type testLogger struct{}
 
-func (l testLogger) Logf(format string, args ...interface{}) {}
+func (l testLogger) Logf(format string, args ...any) {}
 
 func TestRateLimitByIP(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -395,7 +375,7 @@ func TestRateLimitByIP(t *testing.T) {
 		ts := httptest.NewServer(limiter(handler))
 		defer ts.Close()
 
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			resp, err := http.Get(ts.URL)
 			require.NoError(t, err)
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -409,7 +389,7 @@ func TestRateLimitByIP(t *testing.T) {
 		defer ts.Close()
 
 		var rejected bool
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			resp, err := http.Get(ts.URL)
 			require.NoError(t, err)
 			if resp.StatusCode == http.StatusTooManyRequests {
@@ -458,7 +438,7 @@ func TestRateLimitByIP(t *testing.T) {
 		defer ts.Close()
 
 		// exhaust all tokens
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			resp, err := http.Get(ts.URL)
 			require.NoError(t, err)
 			_ = resp.Body.Close()
@@ -478,5 +458,101 @@ func TestRateLimitByIP(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		_ = resp.Body.Close()
+	})
+}
+
+// startServer runs s on a random port and returns its base url. the listener is bound and the server
+// activated before serve starts, so no readiness wait needed. shutdown and serve error checked on cleanup.
+func startServer(t *testing.T, s *Server) string {
+	t.Helper()
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	s.activate()
+	done := make(chan error, 1)
+	go func() { done <- s.serve(l) }()
+
+	t.Cleanup(func() {
+		assert.NoError(t, s.Shutdown())
+		assert.ErrorIs(t, <-done, http.ErrServerClosed)
+	})
+
+	return "http://" + l.Addr().String()
+}
+
+func TestServerRunFailedToListen(t *testing.T) {
+	l, err := net.Listen("tcp", ":0") //nolint:gosec // has to bind the same way Run does to collide with it
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, l.Close()) }()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	s := NewServer("/v1/cmd")
+	s.Add("test", func(uint64, json.RawMessage) Response { return Response{} })
+
+	done := make(chan error, 1)
+	go func() { done <- s.Run(port) }()
+
+	select {
+	case err = <-done:
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), fmt.Sprintf("can't listen on port %d", port))
+	case <-time.After(time.Second):
+		assert.NoError(t, s.Shutdown())
+		t.Fatal("expected Run to fail on the busy port")
+	}
+}
+
+func TestServerServeNotActivated(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, l.Close()) }()
+
+	s := NewServer("/v1/cmd")
+	assert.EqualError(t, s.serve(l), "server is not activated")
+}
+
+func TestServerCallTimeout(t *testing.T) {
+	s := NewServer("/v1/cmd", WithTimeouts(Timeouts{
+		ReadHeaderTimeout: time.Second,
+		WriteTimeout:      5 * time.Second,
+		IdleTimeout:       time.Second,
+		CallTimeout:       50 * time.Millisecond,
+	}))
+
+	s.Add("fast", func(id uint64, _ json.RawMessage) Response {
+		return EncodeResponse(id, "done", nil)
+	})
+	s.Add("slow", func(id uint64, _ json.RawMessage) Response {
+		time.Sleep(500 * time.Millisecond)
+		return EncodeResponse(id, "too late", nil)
+	})
+
+	url := startServer(t, s)
+
+	t.Run("call within timeout", func(t *testing.T) {
+		c := Client{API: url + "/v1/cmd", Client: http.Client{}}
+		r, err := c.Call("fast")
+		require.NoError(t, err)
+		val := ""
+		require.NoError(t, json.Unmarshal(*r.Result, &val))
+		assert.Equal(t, "done", val)
+	})
+
+	t.Run("call over timeout aborted with 503", func(t *testing.T) {
+		b := bytes.Buffer{}
+		require.NoError(t, json.NewEncoder(&b).Encode(Request{Method: "slow", ID: 1}))
+
+		st := time.Now()
+		resp, err := http.Post(url+"/v1/cmd", "application/json", &b)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+		assert.Less(t, time.Since(st), 300*time.Millisecond, "response should not wait for the handler to finish")
+
+		data, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, `{"error":"call timeout"}`, string(data))
 	})
 }
