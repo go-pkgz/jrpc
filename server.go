@@ -14,12 +14,13 @@ import (
 	"github.com/go-pkgz/routegroup"
 )
 
-// Server is json-rpc server with an optional basic auth
+// Server is json-rpc server with an optional basic auth.
+// Auth enforced only if both authUser and authPasswd set, see Auth option.
 type Server struct {
 	api string // url path, i.e. "/command" or "/rpc" etc., required
 
-	authUser          string      // basic auth user name, should match Client.AuthUser, optional
-	authPasswd        string      // basic auth password, should match Client.AuthPasswd, optional
+	authUser          string      // basic auth user name, should match Client.AuthUser, optional, no auth if empty
+	authPasswd        string      // basic auth password, should match Client.AuthPasswd, optional, no auth if empty
 	customMiddlewares middlewares // list of custom middlewares, should match array of http.Handler func, optional
 
 	signature signaturePayload // add server signature to server response headers appName, author, version), disable by default
@@ -103,7 +104,7 @@ func (s *Server) Run(port int) error {
 func (s *Server) activate() {
 
 	if s.authUser == "" || s.authPasswd == "" {
-		s.logger.Logf("[WARN] extension server runs without auth")
+		s.logger.Logf("[WARN] extension server runs without auth, both user and password have to be set to enable it")
 	}
 
 	router := routegroup.New(http.NewServeMux())
@@ -226,7 +227,8 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	rest.RenderJSON(w, fn(req.ID, params))
 }
 
-// basicAuth middleware. enabled only if both AuthUser and AuthPasswd defined.
+// basicAuth middleware, enabled only if both authUser and authPasswd set to non-empty values.
+// with either of them empty every request passes through unauthenticated.
 func (s *Server) basicAuth(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
