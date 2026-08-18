@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -81,15 +82,28 @@ func NewServer(api string, options ...Option) *Server {
 	return srv
 }
 
-// Run http server on given port
+// Run http server on given port, blocks until Shutdown called or the server failed
 func (s *Server) Run(port int) error {
+
+	if len(s.funcs.m) == 0 {
+		return fmt.Errorf("nothing mapped for dispatch, Add has to be called prior to Run")
+	}
+
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return fmt.Errorf("can't listen on port %d: %w", port, err)
+	}
+
+	s.activate()
+	return s.serve(ln)
+}
+
+// activate makes http server with all the middlewares and the dispatch handler.
+// after this call Add won't accept new methods.
+func (s *Server) activate() {
 
 	if s.authUser == "" || s.authPasswd == "" {
 		s.logger.Logf("[WARN] extension server runs without auth")
-	}
-
-	if s.funcs.m == nil && len(s.funcs.m) == 0 {
-		return fmt.Errorf("nothing mapped for dispatch, Add has to be called prior to Run")
 	}
 
 	router := routegroup.New(http.NewServeMux())
@@ -124,16 +138,26 @@ func (s *Server) Run(port int) error {
 
 	s.httpServer.Lock()
 	s.httpServer.Server = &http.Server{
-		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           router,
 		ReadHeaderTimeout: s.timeouts.ReadHeaderTimeout,
 		WriteTimeout:      s.timeouts.WriteTimeout,
 		IdleTimeout:       s.timeouts.IdleTimeout,
 	}
 	s.httpServer.Unlock()
+}
 
-	s.logger.Logf("[INFO] listen on %d", port)
-	return s.httpServer.ListenAndServe()
+// serve runs activated http server on the provided listener
+func (s *Server) serve(l net.Listener) error {
+	s.httpServer.Lock()
+	srv := s.httpServer.Server
+	s.httpServer.Unlock()
+
+	if srv == nil {
+		return fmt.Errorf("server is not activated")
+	}
+
+	s.logger.Logf("[INFO] listen on %s", l.Addr())
+	return srv.Serve(l)
 }
 
 // Shutdown http server
