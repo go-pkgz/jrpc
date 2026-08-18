@@ -265,17 +265,17 @@ func timeout(dt time.Duration) func(http.Handler) http.Handler {
 
 // L defined logger interface used for an optional rest logging
 type L interface {
-	Logf(format string, args ...interface{})
+	Logf(format string, args ...any)
 }
 
 // LoggerFunc type is an adapter to allow the use of ordinary functions as Logger.
-type LoggerFunc func(format string, args ...interface{})
+type LoggerFunc func(format string, args ...any)
 
 // Logf calls f(id)
-func (f LoggerFunc) Logf(format string, args ...interface{}) { f(format, args...) }
+func (f LoggerFunc) Logf(format string, args ...any) { f(format, args...) }
 
 // NoOpLogger logger does nothing
-var NoOpLogger = LoggerFunc(func(format string, args ...interface{}) {}) //nolint
+var NoOpLogger = LoggerFunc(func(format string, args ...any) {}) //nolint
 
 // rateLimitByIP returns middleware that limits requests per second for each client IP.
 // Uses X-Real-IP header (set by rest.RealIP middleware) for client identification.

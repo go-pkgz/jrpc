@@ -25,7 +25,7 @@ func TestServerPrimitiveTypes(t *testing.T) {
 	}
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
-		var args []interface{}
+		var args []any
 		if err := json.Unmarshal(params, &args); err != nil {
 			return Response{Error: err.Error()}
 		}
@@ -42,7 +42,7 @@ func TestServerPrimitiveTypes(t *testing.T) {
 	url := startServer(t, s)
 
 	// check with direct http call
-	clientReq := Request{Method: "test", Params: []interface{}{"blah", 42, true}, ID: 123}
+	clientReq := Request{Method: "test", Params: []any{"blah", 42, true}, ID: 123}
 	b := bytes.Buffer{}
 	require.NoError(t, json.NewEncoder(&b).Encode(clientReq))
 	resp, err := http.Post(url+"/v1/cmd", "application/json", &b)
@@ -126,7 +126,7 @@ func TestServerWithAuth(t *testing.T) {
 	s := NewServer("/v1/cmd", Auth("user", "passwd"))
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
-		var args []interface{}
+		var args []any
 		if err := json.Unmarshal(params, &args); err != nil {
 			return Response{Error: err.Error()}
 		}
@@ -160,7 +160,7 @@ func TestServerErrReturn(t *testing.T) {
 	s := NewServer("/v1/cmd", Auth("user", "passwd"))
 
 	s.Add("test", func(id uint64, params json.RawMessage) Response {
-		var args []interface{}
+		var args []any
 		if err := json.Unmarshal(params, &args); err != nil {
 			return Response{Error: err.Error()}
 		}
@@ -363,7 +363,7 @@ func TestServer_WithLogger(t *testing.T) {
 
 type testLogger struct{}
 
-func (l testLogger) Logf(format string, args ...interface{}) {}
+func (l testLogger) Logf(format string, args ...any) {}
 
 func TestRateLimitByIP(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
