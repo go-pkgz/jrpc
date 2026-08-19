@@ -6,7 +6,7 @@ toolchain go1.24.2
 
 require (
 	github.com/go-pkgz/rest v1.24.0
-	github.com/go-pkgz/routegroup v1.6.0
+	github.com/go-pkgz/routegroup v1.6.1
 	github.com/stretchr/testify v1.12.0
 )
 
