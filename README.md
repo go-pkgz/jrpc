@@ -87,7 +87,7 @@ if err = json.Unmarshal(*resp.Result, &message); err != nil {
 
 [_example](https://github.com/go-pkgz/jrpc/tree/master/_example) has a working pair of a plugin and an application.
 Both are separate go modules pointing to the local jrpc with a `replace` directive, so no extra setup is needed
-beyond go 1.24 or later. Start the plugin first, in one terminal:
+beyond go 1.24 or later and a free local port 8080. Start the plugin first, in one terminal:
 
 ```sh
 cd _example/plugin
@@ -116,6 +116,8 @@ stored {TS:2025-01-12 12:00:00 +0000 UTC Value:12345} with id=54118548792
 loaded {TS:2025-01-12 12:00:00 +0000 UTC Value:12345} from id=54118548792
 can't load for id=something, not found
 ```
+
+The application exits on its own, the plugin keeps listening until stopped with Ctrl-C.
 
 ## Technical details
  
