@@ -2,8 +2,6 @@ module github.com/go-pkgz/jrpc
 
 go 1.24.0
 
-toolchain go1.24.2
-
 require (
 	github.com/go-pkgz/rest v1.24.0
 	github.com/go-pkgz/routegroup v1.6.1
