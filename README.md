@@ -37,7 +37,11 @@ The constructor `NewServer` accepts two parameters:
     `503` can be sent
   * `WithLimits` - defines a limit of calls/sec per client, accepts limit value in `float64` type. A limit between 0 and
     1 allows one call every `1/limit` seconds, e.g. `0.5` allows a call every 2 seconds; zero or a negative value sets
-    no limit
+    no limit.
+    A client is the IP address [rest.RealIP](https://github.com/go-pkgz/rest#realip-middleware) derives from the request:
+    a public IP from the `X-Real-IP`, `CF-Connecting-IP` or `X-Forwarded-For` header, or the address of the connection
+    otherwise. The headers are taken as sent, so the limit holds per client only behind a proxy that overwrites them;
+    a caller connecting directly can send a different public IP with each call and bypass the limit
   * `WithThrottler` - sets throttler middleware limiting the number of parallel calls to the server
   * `WithSignature` - sets server signature, accepts appName, author and version. Disabled by default
   * `WithLogger` - defines custom logger (e.g. [lgr](https://github.com/go-pkgz/lgr))

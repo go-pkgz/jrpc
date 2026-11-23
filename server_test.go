@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -429,41 +432,70 @@ func TestRateLimitByIP(t *testing.T) {
 		assert.True(t, rejected, "expected at least one request to be rate limited")
 	})
 
-	t.Run("uses X-Real-IP header", func(t *testing.T) {
-		limiter := rateLimitByIP(1) // 1 req/sec per IP
-		ts := httptest.NewServer(limiter(handler))
-		defer ts.Close()
+	t.Run("keys on remote address without port, ignores X-Real-IP header", func(t *testing.T) {
+		now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		limiter := newRateLimiter(1, func() time.Time { return now }).handler(handler) // 1 req/sec per client
 
-		client := &http.Client{}
+		call := func(remoteAddr, realIP string) int {
+			req := httptest.NewRequest("POST", "/", http.NoBody)
+			req.RemoteAddr = remoteAddr
+			if realIP != "" {
+				req.Header.Set("X-Real-IP", realIP)
+			}
+			rec := httptest.NewRecorder()
+			limiter.ServeHTTP(rec, req)
+			return rec.Code
+		}
 
-		// first request from IP1 should succeed
-		req1, _ := http.NewRequest("GET", ts.URL, http.NoBody)
-		req1.Header.Set("X-Real-IP", "1.1.1.1")
-		resp1, err := client.Do(req1)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp1.StatusCode)
-		_ = resp1.Body.Close()
+		assert.Equal(t, http.StatusOK, call("1.1.1.1:1000", "spoof-1"), "first request from 1.1.1.1")
+		assert.Equal(t, http.StatusTooManyRequests, call("1.1.1.1:1000", "spoof-2"), "header changed, same client")
+		assert.Equal(t, http.StatusTooManyRequests, call("1.1.1.1:2000", ""), "port changed, same client")
+		assert.Equal(t, http.StatusOK, call("2.2.2.2:1000", ""), "different client")
+		assert.Equal(t, http.StatusOK, call("3.3.3.3", ""), "remote address without port")
+		assert.Equal(t, http.StatusTooManyRequests, call("[::ffff:1.1.1.1]:3000", ""), "IPv4-mapped IPv6, same client")
+		assert.Equal(t, http.StatusOK, call("2001:db8::1", ""), "IPv6 client")
+		assert.Equal(t, http.StatusTooManyRequests, call("[2001:DB8:0::1]:1000", ""), "other spelling, same client")
+	})
 
-		// second request from IP1 should be rate limited
-		req2, _ := http.NewRequest("GET", ts.URL, http.NoBody)
-		req2.Header.Set("X-Real-IP", "1.1.1.1")
-		resp2, err := client.Do(req2)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusTooManyRequests, resp2.StatusCode)
-		_ = resp2.Body.Close()
+	t.Run("removes idle clients", func(t *testing.T) {
+		now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		l := newRateLimiter(2, func() time.Time { return now }) // bucket of 2 is full again after 1s idle
 
-		// request from different IP should succeed
-		req3, _ := http.NewRequest("GET", ts.URL, http.NoBody)
-		req3.Header.Set("X-Real-IP", "2.2.2.2")
-		resp3, err := client.Do(req3)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp3.StatusCode)
-		_ = resp3.Body.Close()
+		assert.True(t, l.allow("1.1.1.1"))
+		assert.True(t, l.allow("2.2.2.2"))
+		assert.True(t, l.allow("2.2.2.2"))
+		assert.False(t, l.allow("2.2.2.2"), "2.2.2.2 used both tokens")
+		assert.Len(t, l.clients, 2)
+
+		now = now.Add(500 * time.Millisecond)
+		assert.True(t, l.allow("2.2.2.2"), "one token back after 500ms")
+		assert.Len(t, l.clients, 2, "nobody idle for 1s yet")
+
+		now = now.Add(500 * time.Millisecond)
+		assert.True(t, l.allow("3.3.3.3"))
+		assert.Len(t, l.clients, 2, "1.1.1.1 idle for 1s removed")
+		assert.NotContains(t, l.clients, "1.1.1.1")
+
+		// 2.2.2.2 was active 500ms ago, its state kept: one token back, not a full bucket of two
+		assert.True(t, l.allow("2.2.2.2"))
+		assert.False(t, l.allow("2.2.2.2"))
+	})
+
+	t.Run("sweep keeps a bucket short of a whole token", func(t *testing.T) {
+		now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		l := newRateLimiter(0.75, func() time.Time { return now }) // a call every 1.333333333...s
+		assert.Equal(t, time.Duration(1333333333), l.sweepEvery)
+
+		assert.True(t, l.allow("1.1.1.1"))
+		now = now.Add(l.sweepEvery) // the sweep is due, the bucket holds 0.99999999975 tokens
+		assert.False(t, l.allow("1.1.1.1"), "not removed and refilled by the sweep")
+		now = now.Add(time.Nanosecond)
+		assert.True(t, l.allow("1.1.1.1"), "a whole token after 4/3s")
 	})
 
 	t.Run("limit below 1/sec", func(t *testing.T) {
 		now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		limiter := rateLimitByIPWithClock(0.5, func() time.Time { return now })(handler) // a call every 2 seconds
+		limiter := newRateLimiter(0.5, func() time.Time { return now }).handler(handler) // a call every 2 seconds
 
 		call := func() int {
 			rec := httptest.NewRecorder()
@@ -481,21 +513,22 @@ func TestRateLimitByIP(t *testing.T) {
 
 	t.Run("rejected calls don't delay the refill", func(t *testing.T) {
 		now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		limiter := rateLimitByIPWithClock(0.1, func() time.Time { return now })(handler) // a call every 10 seconds
+		l := newRateLimiter(0.1, func() time.Time { return now }) // a call every 10 seconds
 
-		call := func() int {
-			rec := httptest.NewRecorder()
-			limiter.ServeHTTP(rec, httptest.NewRequest("POST", "/", http.NoBody))
-			return rec.Code
-		}
-
-		assert.Equal(t, http.StatusOK, call(), "first call allowed")
+		assert.True(t, l.allow("1.1.1.1"))
 		for i := range 9 {
 			now = now.Add(time.Second)
-			assert.Equal(t, http.StatusTooManyRequests, call(), "rejected after %ds", i+1)
+			assert.False(t, l.allow("1.1.1.1"), "rejected after %ds", i+1)
 		}
 		now = now.Add(time.Second)
-		assert.Equal(t, http.StatusOK, call(), "allowed 10s after the first call")
+		assert.True(t, l.allow("1.1.1.1"), "allowed 10s after the first call")
+	})
+
+	t.Run("sweep interval", func(t *testing.T) {
+		assert.Equal(t, time.Second, newRateLimiter(100, time.Now).sweepEvery)
+		assert.Equal(t, 10*time.Second, newRateLimiter(0.1, time.Now).sweepEvery)
+		// the fill time doesn't fit in a Duration, a conversion would overflow and sweep on every call
+		assert.Equal(t, time.Duration(math.MaxInt64), newRateLimiter(1e-12, time.Now).sweepEvery)
 	})
 
 	t.Run("refills tokens over time", func(t *testing.T) {
@@ -621,4 +654,86 @@ func TestServerCallTimeout(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, `{"error":"call timeout"}`, string(data))
 	})
+}
+
+func TestServerLimitsForwardedHeaders(t *testing.T) {
+	rotate := func(format string) func(int) string { return func(i int) string { return fmt.Sprintf(format, i) } }
+	ipv6 := []string{"2001:db8::1", "2001:DB8::1", "2001:db8:0::1", "2001:0db8::0001", " 2001:db8::1 "}
+
+	tbl := []struct {
+		name, header string
+		value        func(i int) string
+		wantOK       int
+	}{
+		{name: "invalid X-Real-IP", header: "X-Real-IP", value: rotate("spoof-%d"), wantOK: 1},
+		{name: "private X-Real-IP", header: "X-Real-IP", value: rotate("10.0.0.%d"), wantOK: 1},
+		{name: "private X-Forwarded-For", header: "X-Forwarded-For", value: rotate("192.168.1.%d"), wantOK: 1},
+		{name: "spellings of one public IPv6", header: "X-Real-IP", value: func(i int) string { return ipv6[i%len(ipv6)] }, wantOK: 1},
+		{name: "public X-Real-IP, taken as sent", header: "X-Real-IP", value: rotate("8.8.8.%d"), wantOK: 10},
+		{name: "public CF-Connecting-IP, taken as sent", header: "CF-Connecting-IP", value: rotate("8.8.8.%d"), wantOK: 10},
+		{name: "public X-Forwarded-For, taken as sent", header: "X-Forwarded-For", value: rotate("8.8.8.%d"), wantOK: 10},
+	}
+	for _, tt := range tbl {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewServer("/v1/cmd", WithLimits(0.001)) // one call, then one more after 1000s
+			s.Add("fn1", func(id uint64, params json.RawMessage) Response { return Response{} })
+			url := startServer(t, s)
+			client := &http.Client{Transport: &http.Transport{}}
+			t.Cleanup(client.CloseIdleConnections) // runs before the server shutdown, which waits on idle connections otherwise
+
+			codes := map[int]int{}
+			for i := range 10 {
+				req, err := http.NewRequest("POST", url+"/v1/cmd", bytes.NewBufferString(`{"method":"fn1"}`))
+				require.NoError(t, err)
+				req.Header.Set(tt.header, tt.value(i))
+				resp, err := client.Do(req)
+				require.NoError(t, err)
+				codes[resp.StatusCode]++
+				_ = resp.Body.Close()
+			}
+			assert.Equal(t, tt.wantOK, codes[http.StatusOK], "accepted")
+			assert.Equal(t, 10-tt.wantOK, codes[http.StatusTooManyRequests], "rejected by the limit, got %v", codes)
+		})
+	}
+}
+
+func TestServerErrorBodies(t *testing.T) {
+	var logs bytes.Buffer
+	var mu sync.Mutex
+	lg := LoggerFunc(func(format string, args ...any) {
+		mu.Lock()
+		defer mu.Unlock()
+		_, _ = fmt.Fprintf(&logs, format+"\n", args...)
+	})
+	s := NewServer("/v1/cmd", WithLogger(lg))
+	s.Add("fn1", func(id uint64, params json.RawMessage) Response { return Response{} })
+	url := startServer(t, s)
+	client := &http.Client{Transport: &http.Transport{}}
+	t.Cleanup(client.CloseIdleConnections) // runs before the server shutdown, which waits on idle connections otherwise
+
+	tbl := []struct {
+		name, body, wantBody, wantLog string
+		wantCode                      int
+	}{
+		{name: "unknown method", body: `{"method":"nosuch","id":1}`, wantCode: http.StatusNotImplemented,
+			wantBody: `{"error":"unsupported method"}`, wantLog: `unsupported method "nosuch"`},
+		{name: "malformed request", body: `not json`, wantCode: http.StatusBadRequest,
+			wantBody: `{"error":"invalid request"}`, wantLog: "invalid character"},
+		{name: "malformed request with a method", body: `{"method":"fn1","id":"x"}`, wantCode: http.StatusBadRequest,
+			wantBody: `{"error":"invalid request"}`, wantLog: "cannot unmarshal string"},
+	}
+	for _, tt := range tbl {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := client.Post(url+"/v1/cmd", "application/json", bytes.NewBufferString(tt.body))
+			require.NoError(t, err)
+			defer func() { _ = resp.Body.Close() }()
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			data, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantBody, strings.TrimSpace(string(data)))
+			mu.Lock()
+			defer mu.Unlock()
+			assert.Contains(t, logs.String(), tt.wantLog, "the reason is logged")
+		})
+	}
 }
