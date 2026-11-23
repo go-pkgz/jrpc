@@ -48,7 +48,7 @@ func main() {
 	log.Printf("loaded %+v from id=%s", rec, recID)
 
 	// try to load a record with invalid ID
-	if resp, err = rpcClient.Call("store.load", "something"); err != nil {
+	if _, err = rpcClient.Call("store.load", "something"); err != nil {
 		log.Printf("can't load for id=something, %s", err)
 	}
 }

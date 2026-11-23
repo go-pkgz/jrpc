@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/go-pkgz/rest v1.24.0
-	github.com/go-pkgz/routegroup v1.6.1
+	github.com/go-pkgz/routegroup v1.6.3
 	github.com/stretchr/testify v1.12.0
 )
 

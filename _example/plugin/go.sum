@@ -1,7 +1,7 @@
 github.com/go-pkgz/rest v1.24.0 h1:GAUCgx7U8xCOC2OynLjhCRMhtnMQH4d1mTdKpQyX2yI=
 github.com/go-pkgz/rest v1.24.0/go.mod h1:dl3EWiuFB4hRTo2Sknj6UrQGFRAYvANK6/NyW8qQPxc=
-github.com/go-pkgz/routegroup v1.6.1 h1:6I/0LabazpZsHAI+jYPeyH/KU2cvZF0bFylUScMNi+Q=
-github.com/go-pkgz/routegroup v1.6.1/go.mod h1:Pmu04fhgWhRtBMIJ8HXppnnzOPjnL/IEPBIdO2zmeqg=
+github.com/go-pkgz/routegroup v1.6.3 h1:AI3nxpBzKga3E6qllY2dgDMld4/nNsxGuV3IrTzzrD0=
+github.com/go-pkgz/routegroup v1.6.3/go.mod h1:Pmu04fhgWhRtBMIJ8HXppnnzOPjnL/IEPBIdO2zmeqg=
 github.com/stretchr/testify v1.12.0 h1:K6Mr6jO9JICuend/5xzTM03ydSV3vdNRYAdPSukj8uI=
 github.com/stretchr/testify v1.12.0/go.mod h1:bOYBZb5qJ00vPzWfIqBUZPaxK8jWiXc6d3ErP4Ca9Gw=
 golang.org/x/crypto v0.48.0 h1:/VRzVqiRSggnhY7gNRxPauEQ5Drw9haKdM0jqfcCFts=
