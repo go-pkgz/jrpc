@@ -35,7 +35,9 @@ The constructor `NewServer` accepts two parameters:
     `IdleTimeout` and `CallTimeout`. `CallTimeout` limits the time allowed for a single call and responds with `503` if
     exceeded, and has to be set below `WriteTimeout`, otherwise the write deadline kills the connection before the
     `503` can be sent
-  * `WithLimits` - defines a limit of calls/sec per client, accepts limit value in `float64` type
+  * `WithLimits` - defines a limit of calls/sec per client, accepts limit value in `float64` type. A limit between 0 and
+    1 allows one call every `1/limit` seconds, e.g. `0.5` allows a call every 2 seconds; zero or a negative value sets
+    no limit
   * `WithThrottler` - sets throttler middleware limiting the number of parallel calls to the server
   * `WithSignature` - sets server signature, accepts appName, author and version. Disabled by default
   * `WithLogger` - defines custom logger (e.g. [lgr](https://github.com/go-pkgz/lgr))

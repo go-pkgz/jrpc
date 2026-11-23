@@ -281,6 +281,11 @@ var NoOpLogger = LoggerFunc(func(format string, args ...any) {}) //nolint
 // rateLimitByIP returns middleware that limits requests per second for each client IP.
 // Uses X-Real-IP header (set by rest.RealIP middleware) for client identification.
 func rateLimitByIP(reqPerSec float64) func(http.Handler) http.Handler {
+	return rateLimitByIPWithClock(reqPerSec, time.Now)
+}
+
+// rateLimitByIPWithClock is rateLimitByIP with the time source passed in
+func rateLimitByIPWithClock(reqPerSec float64, clock func() time.Time) func(http.Handler) http.Handler {
 	type clientState struct {
 		sync.Mutex
 		tokens    float64
@@ -288,7 +293,8 @@ func rateLimitByIP(reqPerSec float64) func(http.Handler) http.Handler {
 	}
 	var (
 		clients sync.Map
-		maxReq  = reqPerSec
+		// a call takes a whole token, so the bucket holds at least one even if the limit is below 1/sec
+		maxReq = max(reqPerSec, 1)
 	)
 
 	return func(next http.Handler) http.Handler {
@@ -298,25 +304,20 @@ func rateLimitByIP(reqPerSec float64) func(http.Handler) http.Handler {
 				ip = r.RemoteAddr
 			}
 
-			now := time.Now()
+			now := clock()
 			val, _ := clients.LoadOrStore(ip, &clientState{tokens: maxReq, lastCheck: now})
 			state := val.(*clientState)
 
 			state.Lock()
-			// token bucket algorithm: refill tokens based on elapsed time
-			elapsed := now.Sub(state.lastCheck).Seconds()
-			state.tokens += elapsed * reqPerSec
-			if state.tokens > maxReq {
-				state.tokens = maxReq
-			}
-			state.lastCheck = now
-
-			if state.tokens < 1 {
+			// token bucket algorithm: refill tokens based on elapsed time since the last accepted call,
+			// a rejected call leaves the state as is
+			tokens := min(state.tokens+now.Sub(state.lastCheck).Seconds()*reqPerSec, maxReq)
+			if tokens < 1 {
 				state.Unlock()
 				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 				return
 			}
-			state.tokens--
+			state.tokens, state.lastCheck = tokens-1, now
 			state.Unlock()
 
 			next.ServeHTTP(w, r)

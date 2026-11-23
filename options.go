@@ -64,9 +64,13 @@ func WithSignature(appName, author, version string) Option {
 	}
 }
 
-// WithLogger sets custom logger, optional
+// WithLogger sets custom logger, optional. A nil logger or a nil LoggerFunc is ignored and the server keeps
+// the current one, NoOpLogger by default
 func WithLogger(logger L) Option {
 	return func(s *Server) {
+		if fn, ok := logger.(LoggerFunc); logger == nil || (ok && fn == nil) {
+			return
+		}
 		s.logger = logger
 	}
 }

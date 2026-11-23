@@ -251,6 +251,21 @@ func TestServer_WithLimits(t *testing.T) {
 		WithLimits(100))
 
 	assert.Equal(t, limits{clientLimit: 100}, s.limits)
+
+	// zero and negative limits turn the per-client limit off
+	for _, limit := range []float64{0, -1} {
+		s = NewServer("/v1/cmd", WithLimits(limit))
+		s.Add("fn1", func(id uint64, params json.RawMessage) Response { return Response{} })
+		url := startServer(t, s)
+		client := &http.Client{Transport: &http.Transport{}}
+		for range 5 {
+			resp, err := client.Post(url+"/v1/cmd", "application/json", bytes.NewBufferString(`{"method":"fn1"}`))
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, resp.StatusCode, "limit %v", limit)
+			_ = resp.Body.Close()
+		}
+		client.CloseIdleConnections()
+	}
 }
 
 func TestServer_WithThrottler(t *testing.T) {
@@ -359,6 +374,20 @@ func TestServer_WithLogger(t *testing.T) {
 
 	s = NewServer("", WithLogger(testLogger{}))
 	assert.Equal(t, reflect.TypeOf(s.logger), reflect.TypeFor[testLogger]())
+
+	// nil logger and nil LoggerFunc ignored, the server keeps the default one and can log
+	var nilFn LoggerFunc
+	for _, lg := range []L{nil, nilFn} {
+		s = NewServer("", WithLogger(lg))
+		assert.Equal(t, reflect.TypeOf(s.logger), reflect.TypeFor[LoggerFunc]())
+		assert.NotPanics(t, func() {
+			s.Add("fn1", func(id uint64, params json.RawMessage) Response { return Response{} })
+		})
+	}
+
+	// nil logger after a custom one keeps the custom one
+	s = NewServer("", WithLogger(testLogger{}), WithLogger(nil))
+	assert.Equal(t, reflect.TypeOf(s.logger), reflect.TypeFor[testLogger]())
 }
 
 type testLogger struct{}
@@ -430,6 +459,43 @@ func TestRateLimitByIP(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp3.StatusCode)
 		_ = resp3.Body.Close()
+	})
+
+	t.Run("limit below 1/sec", func(t *testing.T) {
+		now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		limiter := rateLimitByIPWithClock(0.5, func() time.Time { return now })(handler) // a call every 2 seconds
+
+		call := func() int {
+			rec := httptest.NewRecorder()
+			limiter.ServeHTTP(rec, httptest.NewRequest("POST", "/", http.NoBody))
+			return rec.Code
+		}
+
+		assert.Equal(t, http.StatusOK, call(), "first call allowed")
+		assert.Equal(t, http.StatusTooManyRequests, call(), "second call at once rejected")
+		now = now.Add(time.Second)
+		assert.Equal(t, http.StatusTooManyRequests, call(), "half a token after 1s, rejected")
+		now = now.Add(time.Second)
+		assert.Equal(t, http.StatusOK, call(), "a whole token after 2s, allowed")
+	})
+
+	t.Run("rejected calls don't delay the refill", func(t *testing.T) {
+		now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		limiter := rateLimitByIPWithClock(0.1, func() time.Time { return now })(handler) // a call every 10 seconds
+
+		call := func() int {
+			rec := httptest.NewRecorder()
+			limiter.ServeHTTP(rec, httptest.NewRequest("POST", "/", http.NoBody))
+			return rec.Code
+		}
+
+		assert.Equal(t, http.StatusOK, call(), "first call allowed")
+		for i := range 9 {
+			now = now.Add(time.Second)
+			assert.Equal(t, http.StatusTooManyRequests, call(), "rejected after %ds", i+1)
+		}
+		now = now.Add(time.Second)
+		assert.Equal(t, http.StatusOK, call(), "allowed 10s after the first call")
 	})
 
 	t.Run("refills tokens over time", func(t *testing.T) {
