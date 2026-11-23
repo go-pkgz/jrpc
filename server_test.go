@@ -243,6 +243,26 @@ func TestServer_getDefaultTimeouts(t *testing.T) {
 		WithTimeouts(Timeouts{ReadHeaderTimeout: 1 * time.Second, WriteTimeout: 4 * time.Second, IdleTimeout: 2 * time.Second}))
 
 	assert.Equal(t, Timeouts{ReadHeaderTimeout: 1 * time.Second, WriteTimeout: 4 * time.Second, IdleTimeout: 2 * time.Second}, s.timeouts)
+
+	// zero fields keep the defaults
+	s = NewServer("/v1/cmd", WithTimeouts(Timeouts{CallTimeout: time.Second}))
+	s.Add("fn1", func(id uint64, params json.RawMessage) Response { return Response{} })
+	s.activate()
+	assert.Equal(t, Timeouts{ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 5 * time.Second,
+		CallTimeout: time.Second}, s.timeouts)
+	assert.Equal(t, 5*time.Second, s.httpServer.ReadHeaderTimeout)
+	assert.Equal(t, 10*time.Second, s.httpServer.WriteTimeout)
+	assert.Equal(t, 5*time.Second, s.httpServer.IdleTimeout)
+
+	// zero fields keep the value set by an earlier option
+	s = NewServer("", WithTimeouts(Timeouts{WriteTimeout: 30 * time.Second}), WithTimeouts(Timeouts{CallTimeout: time.Second}),
+		WithTimeouts(Timeouts{}))
+	assert.Equal(t, Timeouts{ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 5 * time.Second,
+		CallTimeout: time.Second}, s.timeouts)
+
+	// negative values turn the server timeouts off
+	s = NewServer("", WithTimeouts(Timeouts{ReadHeaderTimeout: -1, WriteTimeout: -1, IdleTimeout: -1}))
+	assert.Equal(t, Timeouts{ReadHeaderTimeout: -1, WriteTimeout: -1, IdleTimeout: -1}, s.timeouts)
 }
 
 func TestServer_WithLimits(t *testing.T) {

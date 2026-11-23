@@ -32,9 +32,11 @@ The constructor `NewServer` accepts two parameters:
   * `Auth` - sets basic auth credentials, accepts `username` and `password`. Auth is enforced only if both of them
     set to non-empty values; setting just one leaves the server serving every request unauthenticated
   * `WithTimeouts` - sets server timeouts, accepts a `Timeouts` struct with `ReadHeaderTimeout`, `WriteTimeout`,
-    `IdleTimeout` and `CallTimeout`. `CallTimeout` limits the time allowed for a single call and responds with `503` if
-    exceeded, and has to be set below `WriteTimeout`, otherwise the write deadline kills the connection before the
-    `503` can be sent
+    `IdleTimeout` and `CallTimeout`. The defaults are 5s for `ReadHeaderTimeout`, 10s for `WriteTimeout`, 5s for
+    `IdleTimeout` and no `CallTimeout`; a zero field keeps the current value and a negative one turns the timeout off.
+    `CallTimeout` limits the time allowed for a single call and responds with `503` if exceeded, and has to be set
+    below `WriteTimeout`, otherwise the write deadline kills the connection before the `503` can be sent. Calls that may
+    run longer than 10s need a larger `WriteTimeout` as well
   * `WithLimits` - defines a limit of calls/sec per client, accepts limit value in `float64` type. A limit between 0 and
     1 allows one call every `1/limit` seconds, e.g. `0.5` allows a call every 2 seconds; zero or a negative value sets
     no limit.
