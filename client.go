@@ -16,7 +16,7 @@ type Client struct {
 	AuthUser   string      // basic auth user name, should match Server.AuthUser, optional
 	AuthPasswd string      // basic auth password, should match Server.AuthPasswd, optional
 
-	id uint64 // used with atomic to populate unique id to Request.ID
+	id atomic.Uint64 // used with atomic to populate unique id to Request.ID
 }
 
 // Call remote server with given method and arguments.
@@ -30,17 +30,17 @@ func (r *Client) Call(method string, args ...any) (*Response, error) {
 
 	switch {
 	case len(args) == 0:
-		b, err = json.Marshal(Request{Method: method, ID: atomic.AddUint64(&r.id, 1)})
+		b, err = json.Marshal(Request{Method: method, ID: r.id.Add(1)})
 		if err != nil {
 			return nil, fmt.Errorf("marshaling failed for %s: %w", method, err)
 		}
 	case len(args) == 1:
-		b, err = json.Marshal(Request{Method: method, Params: args[0], ID: atomic.AddUint64(&r.id, 1)})
+		b, err = json.Marshal(Request{Method: method, Params: args[0], ID: r.id.Add(1)})
 		if err != nil {
 			return nil, fmt.Errorf("marshaling failed for %s: %w", method, err)
 		}
 	default:
-		b, err = json.Marshal(Request{Method: method, Params: args, ID: atomic.AddUint64(&r.id, 1)})
+		b, err = json.Marshal(Request{Method: method, Params: args, ID: r.id.Add(1)})
 		if err != nil {
 			return nil, fmt.Errorf("marshaling failed for %s: %w", method, err)
 		}

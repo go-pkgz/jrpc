@@ -31,8 +31,8 @@ type jrpcServer struct {
 func main() {
 
 	// optional logger implementing a single func interface
-	// logf(format string, args ...interface{})
-	logger := jrpc.LoggerFunc(func(format string, args ...interface{}) {
+	// logf(format string, args ...any)
+	logger := jrpc.LoggerFunc(func(format string, args ...any) {
 		log.Printf(format, args...)
 	})
 
