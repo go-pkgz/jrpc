@@ -593,6 +593,8 @@ func startServer(t *testing.T, s *Server) string {
 	go func() { done <- s.serve(l) }()
 
 	t.Cleanup(func() {
+		// a spare connection the default transport pooled unused blocks Shutdown until its 5s deadline
+		http.DefaultTransport.(*http.Transport).CloseIdleConnections()
 		assert.NoError(t, s.Shutdown())
 		assert.ErrorIs(t, <-done, http.ErrServerClosed)
 	})
