@@ -18,15 +18,24 @@ func Auth(user, password string) Option {
 }
 
 // WithTimeouts sets server timeout values such as ReadHeader, Write and Idle timeout, optional.
-// If this option not defined server use default timeout values
+// A zero field keeps the current value, by default 5s for ReadHeaderTimeout, 10s for WriteTimeout,
+// 5s for IdleTimeout and no CallTimeout. A negative value turns the timeout off.
 func WithTimeouts(timeouts Timeouts) Option {
 
 	// this option sets only server limits values and exclude middlewares limits fields of Limits struct.
 	return func(s *Server) {
-		s.timeouts.ReadHeaderTimeout = timeouts.ReadHeaderTimeout
-		s.timeouts.WriteTimeout = timeouts.WriteTimeout
-		s.timeouts.IdleTimeout = timeouts.IdleTimeout
-		s.timeouts.CallTimeout = timeouts.CallTimeout // it need for middleware with custom timeout value
+		if timeouts.ReadHeaderTimeout != 0 {
+			s.timeouts.ReadHeaderTimeout = timeouts.ReadHeaderTimeout
+		}
+		if timeouts.WriteTimeout != 0 {
+			s.timeouts.WriteTimeout = timeouts.WriteTimeout
+		}
+		if timeouts.IdleTimeout != 0 {
+			s.timeouts.IdleTimeout = timeouts.IdleTimeout
+		}
+		if timeouts.CallTimeout != 0 {
+			s.timeouts.CallTimeout = timeouts.CallTimeout // it need for middleware with custom timeout value
+		}
 	}
 }
 
@@ -64,9 +73,13 @@ func WithSignature(appName, author, version string) Option {
 	}
 }
 
-// WithLogger sets custom logger, optional
+// WithLogger sets custom logger, optional. A nil logger or a nil LoggerFunc is ignored and the server keeps
+// the current one, NoOpLogger by default
 func WithLogger(logger L) Option {
 	return func(s *Server) {
+		if fn, ok := logger.(LoggerFunc); logger == nil || (ok && fn == nil) {
+			return
+		}
 		s.logger = logger
 	}
 }

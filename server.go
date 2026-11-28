@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -210,14 +212,13 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	}{}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		rest.SendErrorJSON(w, r, s.logger, http.StatusBadRequest, err, req.Method)
+		rest.SendErrorJSON(w, r, s.logger, http.StatusBadRequest, err, "invalid request")
 		return
 	}
 	fn, ok := s.funcs.m[req.Method]
 	if !ok {
-		rest.SendErrorJSON(w, r, s.logger, http.StatusNotImplemented, fmt.Errorf("unsupported method"), req.Method)
+		rest.SendErrorJSON(w, r, s.logger, http.StatusNotImplemented, fmt.Errorf("unsupported method %q", req.Method), "unsupported method")
 		return
-
 	}
 
 	params := json.RawMessage{}
@@ -278,48 +279,94 @@ func (f LoggerFunc) Logf(format string, args ...any) { f(format, args...) }
 // NoOpLogger logger does nothing
 var NoOpLogger = LoggerFunc(func(format string, args ...any) {}) //nolint
 
-// rateLimitByIP returns middleware that limits requests per second for each client IP.
-// Uses X-Real-IP header (set by rest.RealIP middleware) for client identification.
+// rateLimitByIP returns middleware that limits requests per second for each client.
+// The client is identified by r.RemoteAddr, which rest.RealIP sets to the client IP it derives from the request.
 func rateLimitByIP(reqPerSec float64) func(http.Handler) http.Handler {
-	type clientState struct {
-		sync.Mutex
-		tokens    float64
-		lastCheck time.Time
+	return newRateLimiter(reqPerSec, time.Now).handler
+}
+
+// rateLimiter is a token bucket per client, refilled at reqPerSec
+type rateLimiter struct {
+	reqPerSec  float64
+	maxReq     float64            // bucket size
+	sweepEvery time.Duration      // interval between removals of full buckets, the time an empty bucket takes to fill
+	clock      func() time.Time   // time source
+	mu         sync.Mutex         // guards clients and lastSweep
+	clients    map[string]*bucket // buckets by client
+	lastSweep  time.Time          // last time full buckets were removed
+}
+
+// bucket is the state of a single client as of its last accepted call
+type bucket struct {
+	tokens    float64
+	lastCheck time.Time
+}
+
+func newRateLimiter(reqPerSec float64, clock func() time.Time) *rateLimiter {
+	// a call takes a whole token, so the bucket holds at least one even if the limit is below 1/sec
+	maxReq := max(reqPerSec, 1)
+	sweepEvery := time.Duration(math.MaxInt64) // for a limit so low the fill time doesn't fit in a Duration
+	if d := maxReq / reqPerSec * float64(time.Second); d < math.MaxInt64 {
+		sweepEvery = time.Duration(d)
 	}
-	var (
-		clients sync.Map
-		maxReq  = reqPerSec
-	)
-
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := r.Header.Get("X-Real-IP")
-			if ip == "" {
-				ip = r.RemoteAddr
-			}
-
-			now := time.Now()
-			val, _ := clients.LoadOrStore(ip, &clientState{tokens: maxReq, lastCheck: now})
-			state := val.(*clientState)
-
-			state.Lock()
-			// token bucket algorithm: refill tokens based on elapsed time
-			elapsed := now.Sub(state.lastCheck).Seconds()
-			state.tokens += elapsed * reqPerSec
-			if state.tokens > maxReq {
-				state.tokens = maxReq
-			}
-			state.lastCheck = now
-
-			if state.tokens < 1 {
-				state.Unlock()
-				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-				return
-			}
-			state.tokens--
-			state.Unlock()
-
-			next.ServeHTTP(w, r)
-		})
+	return &rateLimiter{
+		reqPerSec:  reqPerSec,
+		maxReq:     maxReq,
+		sweepEvery: sweepEvery,
+		clock:      clock,
+		clients:    map[string]*bucket{},
 	}
+}
+
+func (l *rateLimiter) handler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		client := r.RemoteAddr
+		if host, _, err := net.SplitHostPort(client); err == nil {
+			client = host
+		}
+		if ip, err := netip.ParseAddr(client); err == nil {
+			client = ip.Unmap().String() // one key for every spelling of the same address
+		}
+		if !l.allow(client) {
+			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// allow takes a token from the client's bucket, returns false if the bucket has no whole token
+func (l *rateLimiter) allow(client string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := l.clock()
+
+	// a full bucket is the same as a new one, so dropping it changes nothing for the client
+	if now.Sub(l.lastSweep) >= l.sweepEvery {
+		for k, b := range l.clients {
+			if l.tokens(b, now) >= l.maxReq {
+				delete(l.clients, k)
+			}
+		}
+		l.lastSweep = now
+	}
+
+	b, ok := l.clients[client]
+	if !ok {
+		b = &bucket{tokens: l.maxReq, lastCheck: now}
+		l.clients[client] = b
+	}
+
+	// a rejected call leaves the bucket as is, so the refill is always counted from the last accepted call
+	tokens := l.tokens(b, now)
+	if tokens < 1 {
+		return false
+	}
+	b.tokens, b.lastCheck = tokens-1, now
+	return true
+}
+
+// tokens returns the number of tokens in the bucket at the given time, refilled since its last accepted call
+func (l *rateLimiter) tokens(b *bucket, now time.Time) float64 {
+	return min(b.tokens+now.Sub(b.lastCheck).Seconds()*l.reqPerSec, l.maxReq)
 }

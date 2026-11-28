@@ -26,14 +26,14 @@ type Response struct {
 func EncodeResponse(id uint64, resp any, e error) Response {
 	v, err := json.Marshal(&resp)
 	if err != nil {
-		return Response{Error: err.Error()}
+		return Response{ID: id, Error: err.Error()}
 	}
 	if e != nil {
 		return Response{ID: id, Result: nil, Error: e.Error()} // pass input error
 	}
 	raw := json.RawMessage{}
 	if err := raw.UnmarshalJSON(v); err != nil {
-		return Response{Error: err.Error()}
+		return Response{ID: id, Error: err.Error()}
 	}
 
 	return Response{ID: id, Result: &raw}

@@ -20,9 +20,9 @@ type Client struct {
 }
 
 // Call remote server with given method and arguments.
-// Empty args will be ignored, single arg will be marshaled as-us and multiple args marshaled as []interface{}.
-// Returns Response and error. Note: Response has it's own Error field, but that onw controlled by server.
-// Returned error represent client-level errors, like failed http call, failed marshaling and so on.
+// Empty args will be ignored, single arg will be marshaled as-is and multiple args marshaled as []interface{}.
+// Returns Response and error. A non-empty Response.Error from the server is returned as the error, with a nil Response.
+// Other errors are client-level ones, like failed http call, non-200 status, failed marshaling and so on.
 func (r *Client) Call(method string, args ...any) (*Response, error) {
 
 	var b []byte
