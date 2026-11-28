@@ -112,7 +112,7 @@ if err = json.Unmarshal(*resp.Result, &message); err != nil {
 
 [_example](https://github.com/go-pkgz/jrpc/tree/master/_example) has a working pair of a plugin and an application.
 Both are separate go modules pointing to the local jrpc with a `replace` directive, so no extra setup is needed
-beyond go 1.24 or later and a free local port 8080. Start the plugin first, in one terminal:
+beyond go 1.25 or later and a free local port 8080. Start the plugin first, in one terminal:
 
 ```sh
 cd _example/plugin
